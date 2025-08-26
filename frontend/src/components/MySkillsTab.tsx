@@ -51,7 +51,8 @@ export default function MySkillsTab() {
         url.searchParams.append("limit", pageSize.toString());
         if (statusFilter) {
       // 🔽 Convert to lowercase before sending
-      url.searchParams.append("status", statusFilter.toLowerCase());
+      if (statusFilter) {url.searchParams.append("status", statusFilter);}
+
     }
 
         const res = await fetch(url.toString(), {

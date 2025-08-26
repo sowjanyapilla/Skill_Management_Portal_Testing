@@ -4,50 +4,57 @@ from datetime import datetime
 
 
 # -------------------- Base --------------------
-class UserBase(BaseModel):
+class EmployeeBase(BaseModel):
     email: EmailStr
     name: str
-    employee_id: str
-    manager_id: Optional[int] = None
+    emp_id: str                           # Matches DB column
+    approver_id: Optional[int] = None     # Matches DB column
 
 
 # -------------------- Create --------------------
-class UserCreate(UserBase):
+class EmployeeCreate(EmployeeBase):
     pass
 
 
 # -------------------- Login --------------------
-class UserLogin(BaseModel):
+class EmployeeLogin(BaseModel):
     google_token: str
 
 
 # -------------------- Response --------------------
-class UserResponse(UserBase):
+class EmployeeResponse(EmployeeBase):
     id: int
-    created_at: datetime
+    designation: Optional[str] = None
+    capability: Optional[str] = None
+    is_approver: bool
+    is_active: bool
+    is_available: bool
 
     class Config:
         from_attributes = True
 
 
 # -------------------- Profile with Relations --------------------
-class UserProfile(UserResponse):
-    subordinates: List["UserResponse"] = Field(default_factory=list)
-    manager: Optional["UserResponse"] = None
+class EmployeeProfile(EmployeeResponse):
+    subordinates: List["EmployeeResponse"] = Field(default_factory=list)
+    approver: Optional["EmployeeResponse"] = None   # approver_id relationship
 
     class Config:
         from_attributes = True
 
-class UserAuthenticated(BaseModel):
+
+# -------------------- Authenticated User --------------------
+class EmployeeAuthenticated(BaseModel):
     id: int
     email: EmailStr
     name: str
-    employee_id: str
-    is_manager: bool # This field was missing
-    manager_id: Optional[int] = None
-    created_at: datetime
-    designation: Optional[str] = None # This field was missing
-    capability: Optional[str] = None # This field was missing
+    emp_id: str
+    is_approver: bool                 # Matches DB column
+    approver_id: Optional[int] = None
+    designation: Optional[str] = None
+    capability: Optional[str] = None
+    is_active: bool
+    is_available: bool
 
     model_config = {
         "from_attributes": True

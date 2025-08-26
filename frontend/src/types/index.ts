@@ -40,27 +40,28 @@ export interface SkillSubmission {
   id: number;
   user_id: number;
   skill_name: string;
-  sub_skills: SubSkillData[]; // ⚡ notice difference
+  sub_skills: SubSkillData[]; 
   status: 'pending' | 'approved' | 'rejected';
   manager_comments?: string;
   submitted_at: string;
   reviewed_at?: string;
   reviewed_by?: string;
   updated_at?: string;
-
 }
 
 
+
 export interface SubSkillData {
-  name: string;
+  id?: number;                  // for sub-skill id from backend
+  name: string;                 // fallback if creating a new sub-skill
   proficiency: number;
   experience: number;
   hasCertification: boolean;
   certificationFile?: File;
   employeeName?: string;
   employeeId?: string;
-
 }
+
 
 export interface SkillFilter {
   skill?: string;
