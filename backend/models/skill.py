@@ -1,6 +1,6 @@
 
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Float, Text, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Float, Text, Enum, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -49,6 +49,8 @@ class EmployeeSkill(Base):
     experience = Column(Integer)
     proficiency = Column(Integer)
     certification = Column(String(200))
+    certification_creation_date = Column(Date, nullable=True)
+    certification_expiration_date = Column(Date, nullable=True)
     manager_comments = Column(Text)
     status = Column(
         Enum(SkillStatus, name="skill_status", create_type=False),
@@ -57,11 +59,12 @@ class EmployeeSkill(Base):
     )
     approver_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
+
     # Relationships
     employee = relationship("Employee", back_populates="skills", foreign_keys=[employee_id])
     approver = relationship("Employee", foreign_keys=[approver_id])
     subskill = relationship("SubSkill", back_populates="employee_skills")
-    histories = relationship("EmployeeSkillHistory", back_populates="skill", cascade="all, delete-orphan")
+    histories = relationship("EmployeeSkillHistory", back_populates="skill", cascade="save-update, merge", passive_deletes=True)
     created_date = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -69,7 +72,7 @@ class EmployeeSkillHistory(Base):
     __tablename__ = "employee_skill_history"
 
     history_id = Column(Integer, primary_key=True, index=True)
-    emp_skill_id = Column(Integer, ForeignKey("employee_skills.emp_skill_id", ondelete="CASCADE"), nullable=False)
+    emp_skill_id = Column(Integer, ForeignKey("employee_skills.emp_skill_id", ondelete="SET NULL"), nullable=True)
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     subskill_id = Column(Integer, ForeignKey("sub_skills.subskill_id", ondelete="CASCADE"), nullable=False)
 
@@ -83,8 +86,8 @@ class EmployeeSkillHistory(Base):
         default=SkillStatus.PENDING,
         nullable=False
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     approver_id = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     updated_by = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)

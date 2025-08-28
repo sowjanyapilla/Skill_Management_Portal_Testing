@@ -106,6 +106,12 @@ export default function MySkillsTab() {
     setTimeout(() => setSuccessMessage(""), 3000);
   };
 
+  const handleSkillSubmitAndAddNew = () => {
+  setSuccessMessage("Skill has been submitted successfully!");
+  setRefreshKey((prev) => prev + 1);
+  setTimeout(() => setSuccessMessage(""), 3000);
+};
+
   const getStatusBadge = (status?: string) => {
     if (!status) return null;
     const styles: Record<string, string> = {
@@ -175,11 +181,23 @@ export default function MySkillsTab() {
       )}
 
       {showAddSkill ? (
-        <AddSkillCard
-          onSubmit={handleSkillSubmit}
-          onCancel={() => setShowAddSkill(false)}
-        />
-      ) : (
+  <AddSkillCard
+    onSubmit={() => {
+      // Normal submit: close card
+      setSuccessMessage("Skill has been submitted successfully!");
+      setShowAddSkill(false);
+      setRefreshKey((prev) => prev + 1);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    }}
+    onSubmitAndAddNew={() => {
+      // Submit & Add New: keep card open
+      setSuccessMessage("Skill has been submitted successfully!");
+      setRefreshKey((prev) => prev + 1);
+      setTimeout(() => setSuccessMessage(""), 3000);
+    }}
+    onCancel={() => setShowAddSkill(false)}
+  />
+) : (
         <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
           {/* Table */}
           <div className="overflow-x-auto">

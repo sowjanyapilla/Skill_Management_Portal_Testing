@@ -3,6 +3,7 @@ import { User, LogOut } from 'lucide-react';
 import MySkillsTab from './MySkillsTab';
 import SkillMatchingTab from './SkillMatchingTab';
 import ApprovalsTab from './ApprovalsTab';
+import EmployeeManagement from './EmployeeManagement';
 import { User as UserType } from '../types';
 
 interface DashboardProps {
@@ -10,19 +11,21 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type TabType = 'my-skills' | 'skill-matching' | 'approvals';
+// Add 'employee-management' to TabType
+type TabType = 'my-skills' | 'skill-matching' | 'approvals' | 'employee-management';
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('my-skills');
   const [successMessage, setSuccessMessage] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0); // to trigger refresh of MySkillsTab
+  const [refreshKey, setRefreshKey] = useState(0); // to trigger refresh of tabs
 
   const tabs = [
     { id: 'my-skills', label: 'My Skills', component: MySkillsTab },
-    ...(user.is_manager
+    ...(user.is_approver
       ? [
           { id: 'skill-matching', label: 'Skill Matching', component: SkillMatchingTab },
           { id: 'approvals', label: 'Approvals', component: ApprovalsTab },
+          { id: 'employee-management', label: 'Employee Management', component: EmployeeManagement },
         ]
       : []),
   ];
@@ -40,7 +43,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="flex items-center space-x-2">
                 <User className="w-5 h-5 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700">{user.name}</span>
-                {user.is_manager && (
+                {user.is_approver && (
                   <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
                     Manager
                   </span>

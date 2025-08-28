@@ -8,11 +8,14 @@ class EmployeeBase(BaseModel):
     email: EmailStr
     name: str
     emp_id: str                           # Matches DB column
-    approver_id: Optional[int] = None     # Matches DB column
+    approver_id: Optional[int] = None   
+      # Matches DB column
 
 
 # -------------------- Create --------------------
 class EmployeeCreate(EmployeeBase):
+    designation: Optional[str] = None
+    capability: Optional[str] = None
     pass
 
 
@@ -59,3 +62,13 @@ class EmployeeAuthenticated(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+class EmployeeUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    approver_id: Optional[int] = None
+    designation: Optional[str] = None
+    capability: Optional[str] = None
+    is_approver: Optional[bool] = None
+    is_active: Optional[bool] = None
+    is_available: Optional[bool] = None

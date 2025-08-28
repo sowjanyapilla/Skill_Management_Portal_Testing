@@ -347,3 +347,283 @@
 
 #     await db.commit()
 #     return {"emp_skill_id": emp_skill_id, "status": skill.status.value, "approver_id": current_user.id}
+
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+
+from database import get_db
+from models import SubSkill, SkillStatus, MasterSkill, Employee, EmployeeSkill, EmployeeSkillHistory
+
+router = APIRouter(prefix="/approvals", tags=["Approvals"])
+
+from sqlalchemy import func
+
+@router.get("/pending")
+async def get_pending_approvals(
+    manager_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    employee_name: str | None = None,
+    skill_name: str | None = None,
+    sub_skill_name: str | None = None,
+    has_certification: bool | None = None,
+    min_experience: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    base_stmt = (
+        select(EmployeeSkill)
+        .options(
+            selectinload(EmployeeSkill.employee),
+            selectinload(EmployeeSkill.subskill).selectinload(SubSkill.master_skill)
+        )
+        .join(EmployeeSkill.employee)
+        .where(
+            EmployeeSkill.status == SkillStatus.PENDING,
+            EmployeeSkill.approver_id == manager_id
+        )
+    )
+
+    if employee_name:
+        base_stmt = base_stmt.where(Employee.name.ilike(f"%{employee_name}%"))
+    if skill_name:
+        base_stmt = base_stmt.join(EmployeeSkill.subskill).join(SubSkill.master_skill).where(MasterSkill.skill_name.ilike(f"%{skill_name}%"))
+    if sub_skill_name:
+        base_stmt = base_stmt.join(EmployeeSkill.subskill).where(SubSkill.subskill_name.ilike(f"%{sub_skill_name}%"))
+    if has_certification is not None:
+        base_stmt = base_stmt.where(EmployeeSkill.certification.isnot(None) if has_certification else EmployeeSkill.certification.is_(None))
+    if min_experience is not None:
+        base_stmt = base_stmt.where(EmployeeSkill.experience >= min_experience)
+
+    total_stmt = select(func.count()).select_from(base_stmt.subquery())
+    total = (await db.execute(total_stmt)).scalar()
+
+    stmt = base_stmt.order_by(EmployeeSkill.created_date.desc()).offset((page - 1) * limit).limit(limit)
+    skills = (await db.execute(stmt)).scalars().all()
+
+    return {
+        "records": [
+            {
+                "id": s.emp_skill_id,
+                "sub_skill_name": s.subskill.subskill_name,
+                "skill_name": s.subskill.master_skill.skill_name,
+                "employee": {
+                    "id": s.employee.id,
+                    "name": s.employee.name,
+                    "email": s.employee.email,
+                },
+                "experience": s.experience,
+                "proficiency": s.proficiency,
+                "certification": s.certification,
+                "status": s.status.value,
+                "created_at": s.created_date,
+            }
+            for s in skills
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+
+
+@router.get("/history")
+async def get_skill_history(
+    manager_id: int,
+    status: SkillStatus = Query(..., description="APPROVED or REJECTED"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    employee_name: str | None = None,
+    skill_name: str | None = None,
+    sub_skill_name: str | None = None,
+    has_certification: bool | None = None,
+    min_experience: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    base_stmt = (
+        select(EmployeeSkillHistory)
+        .options(
+            selectinload(EmployeeSkillHistory.employee),
+            selectinload(EmployeeSkillHistory.subskill).selectinload(SubSkill.master_skill)
+        )
+        .join(EmployeeSkillHistory.employee)
+        .where(
+            EmployeeSkillHistory.approval_status == status,
+            Employee.approver_id == manager_id
+        )
+    )
+
+    # 🔍 Apply filters (same as pending)
+    if employee_name:
+        base_stmt = base_stmt.where(Employee.name.ilike(f"%{employee_name}%"))
+
+    if skill_name:
+        base_stmt = base_stmt.join(EmployeeSkillHistory.subskill).join(SubSkill.master_skill).where(
+            MasterSkill.skill_name.ilike(f"%{skill_name}%")
+        )
+
+    if sub_skill_name:
+        base_stmt = base_stmt.join(EmployeeSkillHistory.subskill).where(
+            SubSkill.subskill_name.ilike(f"%{sub_skill_name}%")
+        )
+
+    if has_certification is not None:
+        if has_certification:
+            base_stmt = base_stmt.where(EmployeeSkillHistory.certification.isnot(None))
+        else:
+            base_stmt = base_stmt.where(EmployeeSkillHistory.certification.is_(None))
+
+    if min_experience is not None:
+        base_stmt = base_stmt.where(EmployeeSkillHistory.experience >= min_experience)
+
+    # 📊 Total count
+    total_stmt = select(func.count()).select_from(base_stmt.subquery())
+    total = (await db.execute(total_stmt)).scalar()
+
+    # 📑 Pagination
+    stmt = (
+        base_stmt
+        .order_by(EmployeeSkillHistory.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    histories = (await db.execute(stmt)).scalars().all()
+
+    # 🔄 Build response
+    return {
+        "records": [
+            {
+                "id": h.history_id,
+                "sub_skill_name": h.subskill.subskill_name,
+                "skill_name": h.subskill.master_skill.skill_name,
+                "employee": {
+                    "id": h.employee.id,
+                    "name": h.employee.name,
+                    "email": h.employee.email,
+                },
+                "experience": h.experience,
+                "proficiency": h.proficiency,
+                "certification": h.certification,
+                "status": h.approval_status.value,
+                "manager_proficiency": h.manager_proficiency,
+                "manager_comments": h.manager_comments,
+                "created_at": h.created_at,
+                "updated_at": h.updated_at,
+            }
+            for h in histories
+        ],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
+
+from fastapi import Body
+from sqlalchemy import update
+from sqlalchemy.exc import NoResultFound
+from datetime import datetime,timezone
+@router.put("/{emp_skill_id}", response_model=dict)
+async def update_approval(
+    emp_skill_id: int,
+    action: str = Body(..., description="Action: approve or reject"),
+    proficiency: int | None = Body(None, description="Manager proficiency"),
+    comments: str | None = Body(None, description="Manager comments"),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1️⃣ Validate action
+    if action not in ("approve", "reject"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid action. Must be 'approve' or 'reject'."
+        )
+
+    # 2️⃣ Fetch the pending EmployeeSkill
+    stmt = select(EmployeeSkill).where(EmployeeSkill.emp_skill_id == emp_skill_id)
+    result = await db.execute(stmt)
+    emp_skill = result.scalar_one_or_none()
+
+    if not emp_skill:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+
+    if emp_skill.status != SkillStatus.PENDING:
+        raise HTTPException(
+            status_code=400,
+            detail="Only pending submissions can be updated."
+        )
+        
+
+    # 3️⃣ Track old employee proficiency before update
+    old_proficiency = emp_skill.proficiency
+    current_approver = emp_skill.approver_id
+    history_data = {
+        "emp_skill_id": emp_skill.emp_skill_id,
+        "employee_id": emp_skill.employee_id,
+        "subskill_id": emp_skill.subskill_id,
+        "experience": emp_skill.experience,
+        "certification": emp_skill.certification,
+        "created_at": emp_skill.created_date,
+    }
+    # === APPROVE FLOW ===
+    if action == "approve":
+        emp_skill.status = SkillStatus.APPROVED
+        if comments is not None:
+            emp_skill.manager_comments = comments
+        if proficiency is not None and proficiency != emp_skill.proficiency:
+            emp_skill.proficiency = proficiency
+
+        db.add(emp_skill)
+
+    # === REJECT FLOW ===
+    else:
+        # Find last approved history for this skill
+        stmt = (
+            select(EmployeeSkillHistory)
+            .where(
+                EmployeeSkillHistory.emp_skill_id == emp_skill.emp_skill_id,
+                EmployeeSkillHistory.approval_status == SkillStatus.APPROVED
+            )
+            .order_by(EmployeeSkillHistory.updated_at.desc())
+        )
+        last_approved = (await db.execute(stmt)).scalars().first()
+
+        if last_approved:
+            # Roll back to last approved state
+            emp_skill.experience = last_approved.experience
+            emp_skill.proficiency = last_approved.proficiency
+            emp_skill.certification = last_approved.certification
+            emp_skill.status = SkillStatus.APPROVED  # rollback means still approved
+            emp_skill.manager_comments = last_approved.manager_comments
+            emp_skill.approver_id = last_approved.approver_id
+            emp_skill.created_date = last_approved.created_at
+            db.add(emp_skill)
+        else:
+            # No previous approved → delete the emp_skill record
+            await db.delete(emp_skill)
+
+    print(history_data)
+    history = EmployeeSkillHistory(
+        emp_skill_id=history_data["emp_skill_id"],
+        employee_id=history_data["employee_id"],
+        subskill_id=history_data["subskill_id"],
+        experience=history_data["experience"],
+        proficiency=old_proficiency,
+        certification=history_data["certification"],
+        manager_proficiency=proficiency if proficiency is not None else None,
+        manager_comments=comments,
+        approval_status=SkillStatus.APPROVED if action == "approve" else SkillStatus.REJECTED,
+        created_at=history_data["created_at"],
+        updated_at=datetime.now(timezone.utc),
+        approver_id=current_approver,   # ✅ always current approver
+        updated_by=current_approver,
+    )
+
+
+    db.add(history)
+    await db.commit()
+
+    # 5️⃣ Response
+    return {
+        "emp_skill_id": emp_skill_id,
+        "status": history.approval_status.value,
+        "updated_at": history.updated_at,
+    }

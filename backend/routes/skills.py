@@ -389,37 +389,41 @@
 
 
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, Body
 from sqlalchemy import and_, or_, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 from collections import defaultdict
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from database import get_db
 from models.skill import MasterSkill, SubSkill, EmployeeSkill, SkillStatus, EmployeeSkillHistory
+from models.user import Employee
 from schemas.user import EmployeeAuthenticated
 from schemas.skill import (
     SkillCreate, SkillResponse, SubSkillResponse
 )
 from routes.auth import get_current_user
 
-import pandas as pd
-from io import BytesIO
+
 
 router = APIRouter(prefix="/skills", tags=["Skills"])
 
 
 # -------------------- Create a Skill with SubSkills --------------------
-@router.post("/", response_model=SkillResponse)
+@router.post("/", response_model=SkillResponse, status_code=201)
 async def create_skill(
     skill_data: SkillCreate,
     db: AsyncSession = Depends(get_db),
     current_user: EmployeeAuthenticated = Depends(get_current_user)
 ):
-    # ✅ Find master skill (create if not exists)
+    # Find master skill (create if not exists)
     result = await db.execute(
         select(MasterSkill).where(MasterSkill.skill_name == skill_data.skill_name)
     )
@@ -427,70 +431,80 @@ async def create_skill(
     if not master_skill:
         master_skill = MasterSkill(skill_name=skill_data.skill_name)
         db.add(master_skill)
-        await db.flush()
+        await db.flush()  # Get master_skill.skill_id
 
-    sub_skills_list = []
+    employee_skills = []
 
     for sub_skill_data in skill_data.sub_skills:
-        # ✅ Check if subskill already exists
+        # Check if subskill exists
         result = await db.execute(
             select(SubSkill).where(
                 SubSkill.skill_id == master_skill.skill_id,
-                SubSkill.subskill_name == sub_skill_data.sub_skill_name
+                SubSkill.subskill_name == sub_skill_data.subskill_name
             )
         )
         sub_skill = result.scalars().first()
 
         if not sub_skill:
-            # Only create if it doesn’t exist yet
             sub_skill = SubSkill(
                 skill_id=master_skill.skill_id,
-                subskill_name=sub_skill_data.sub_skill_name,
+                subskill_name=sub_skill_data.subskill_name,
             )
             db.add(sub_skill)
-            await db.flush()
+            await db.flush()  # Get sub_skill.subskill_id
 
-        # ✅ Always insert into EmployeeSkill
+        # Create EmployeeSkill
         employee_skill = EmployeeSkill(
-            employee_id=current_user.employee_id,
+            employee_id=current_user.id,
             subskill_id=sub_skill.subskill_id,
-            experience=sub_skill_data.experience_years,
+            experience=sub_skill_data.experience,
             proficiency=sub_skill_data.employee_proficiency,
-            certification=sub_skill_data.certification_file_url,
+            certification=sub_skill_data.certification,
+            certification_creation_date=sub_skill_data.certification_creation_date,   # NEW
+            certification_expiration_date=sub_skill_data.certification_expiration_date, # NEW
             status=SkillStatus.PENDING,
         )
         db.add(employee_skill)
-        await db.flush()
+        employee_skills.append((employee_skill, sub_skill))
 
-        sub_skills_list.append(
-            SubSkillResponse(
-                emp_skill_id=employee_skill.emp_skill_id,
-                employee_id=employee_skill.employee_id,
-                subskill_id=sub_skill.subskill_id,
-                subskill_name=sub_skill.subskill_name,
-                employee_proficiency=employee_skill.proficiency,
-                experience=employee_skill.experience,
-                certification=employee_skill.certification,
-                status=employee_skill.status,
-                manager_comments=employee_skill.manager_comments,
-                approver_id=employee_skill.approver_id,
-                manager_proficiency=None,
-                created_at=employee_skill.created_date,
-                last_updated_at=None,
-            )
-        )
-
+    # Commit all changes at once
     await db.commit()
+
+    # Refresh EmployeeSkill objects to get IDs and timestamps
+    for emp_skill, sub_skill in employee_skills:
+        await db.refresh(emp_skill)
+
+    sub_skills_list = [
+        SubSkillResponse(
+            emp_skill_id=emp_skill.emp_skill_id,
+            employee_id=emp_skill.employee_id,
+            subskill_id=emp_skill.subskill_id,
+            experience=emp_skill.experience,
+            proficiency=emp_skill.proficiency,
+            certification=emp_skill.certification,
+            manager_comments=emp_skill.manager_comments,
+            status=emp_skill.status.value if emp_skill.status else None,
+            approver_id=emp_skill.approver_id,
+            created_at=emp_skill.created_date,
+            # Include NEW fields
+            certification_creation_date=emp_skill.certification_creation_date,
+            certification_expiration_date=emp_skill.certification_expiration_date,
+        )
+        for emp_skill, _ in employee_skills
+    ]
+
+    await db.refresh(master_skill)
 
     return SkillResponse(
         id=master_skill.skill_id,
         user_id=current_user.id,
         skill_name=master_skill.skill_name,
         status=SkillStatus.PENDING,
-        created_at=datetime.utcnow(),
         manager_comments=None,
         sub_skills=sub_skills_list,
     )
+
+
 # -------------------- Get All Master Skills --------------------
 
 @router.get("/my-skills")
@@ -623,3 +637,453 @@ async def get_sub_skills(master_skill_id: int, db: AsyncSession = Depends(get_db
     sub_skills = result.scalars().all()
     return [{"id": s.subskill_id, "subskill_name": s.subskill_name} for s in sub_skills]
 
+def str_to_bool(val: Optional[str]):
+    if val is None:
+        return None
+    if val.lower() in ["true", "1", "yes"]:
+        return True
+    elif val.lower() in ["false", "0", "no"]:
+        return False
+    return None
+
+async def compute_skill_level_coverage(
+    all_employee_skills: list,
+    filter_skills: list
+) -> float:
+    """
+    Compute skill coverage percentage for an employee.
+    all_employee_skills: list of EmployeeSkill + SubSkill + MasterSkill tuples
+    filter_skills: list of dicts with skill_name, min_proficiency, min_experience, max_experience, require_certification
+    """
+
+    total_skills = len(filter_skills)
+    if total_skills == 0:
+        return 0.0
+
+    matched_skills = 0
+
+    for f in filter_skills:
+        skill_matches = [
+            s for s in all_employee_skills
+            if (
+                f["skill_name"].lower() in s.MasterSkill.skill_name.lower()  # match master skill
+                or f["skill_name"].lower() in s.SubSkill.subskill_name.lower()  # OR match sub-skill
+            )
+            and (f.get("min_proficiency") is None or (s.EmployeeSkill.proficiency is not None and s.EmployeeSkill.proficiency >= f["min_proficiency"]))
+            and (f.get("min_experience") is None or (s.EmployeeSkill.experience is not None and s.EmployeeSkill.experience >= f["min_experience"]))
+            and (f.get("max_experience") is None or (s.EmployeeSkill.experience is not None and s.EmployeeSkill.experience <= f["max_experience"]))
+            and (not f.get("require_certification", False) or s.EmployeeSkill.certification is not None)
+        ]
+        if skill_matches:
+            matched_skills += 1
+
+    coverage = (matched_skills / total_skills) * 100
+    return round(coverage, 2)
+
+# This is the corrected version of your /matching endpoint.
+# Copy and paste this to replace the existing one in your file.
+
+@router.get("/matching")
+async def get_employee_skill_coverage(
+    request: Request,
+    skill: Optional[str] = None,
+    proficiency: Optional[int] = None,
+    min_experience: Optional[float] = None,
+    max_experience: Optional[float] = None,
+    has_certification: Optional[bool] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(5, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns employees grouped by skills with coverage %.
+    Pagination applied at employee level.
+    """
+
+    # Build filter list for coverage calculation
+    filter_skills = []
+    if skill:
+        skill_list = [s.strip() for s in skill.split(",") if s.strip()]
+        for s in skill_list:
+            filter_skills.append({
+                "skill_name": s,
+                "min_proficiency": proficiency,
+                "min_experience": min_experience,
+                "max_experience": max_experience,
+                "require_certification": has_certification,
+            })
+
+    # Step 1: Build the filtered query for matching employees
+    filtered_emp_query = select(Employee).where(Employee.is_active == True)
+    
+    # Check if ANY filter exists before adding joins and where clauses.
+    has_any_filter = skill or proficiency is not None or min_experience is not None or max_experience is not None or has_certification is not None
+
+    if has_any_filter:
+        # Explicitly join Employee to EmployeeSkill to resolve the ambiguity
+        filtered_emp_query = filtered_emp_query.join(EmployeeSkill, Employee.id == EmployeeSkill.employee_id)
+        
+        # Now add the remaining joins
+        filtered_emp_query = filtered_emp_query.join(SubSkill).join(MasterSkill)
+        
+        # This is the key change to handle comma-separated skills
+        if skill:
+            skill_list = [s.strip() for s in skill.split(",") if s.strip()]
+            
+            # Build a list of individual OR conditions
+            skill_or_conditions = [
+                or_(
+                    MasterSkill.skill_name.ilike(f"%{s}%"),
+                    SubSkill.subskill_name.ilike(f"%{s}%")
+                ) for s in skill_list
+            ]
+            
+            # Combine all OR conditions into one `where` clause
+            filtered_emp_query = filtered_emp_query.where(or_(*skill_or_conditions))
+
+        # Apply other filters to the joined tables
+        if proficiency is not None:
+            filtered_emp_query = filtered_emp_query.where(EmployeeSkill.proficiency >= proficiency)
+        if min_experience is not None:
+            filtered_emp_query = filtered_emp_query.where(EmployeeSkill.experience >= min_experience)
+        if max_experience is not None:
+            filtered_emp_query = filtered_emp_query.where(EmployeeSkill.experience <= max_experience)
+        if has_certification is not None:
+            if has_certification:
+                filtered_emp_query = filtered_emp_query.where(EmployeeSkill.certification.isnot(None))
+            else:
+                filtered_emp_query = filtered_emp_query.where(EmployeeSkill.certification.is_(None))
+
+    # Add a DISTINCT clause to ensure we only get unique employees,
+    # and GROUP BY to allow counting correctly.
+    filtered_emp_query = filtered_emp_query.group_by(Employee.id)
+
+    # Step 2: Get the total count of matching employees.
+    # We use a subquery to correctly count unique employees after joins and filters.
+    total_count_query = select(func.count()).select_from(filtered_emp_query.subquery())
+    total_matching_employees = (await db.execute(total_count_query)).scalar() or 0
+
+    # Step 3: Apply pagination to the filtered query and execute.
+    stmt = filtered_emp_query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(stmt)
+    employees = result.scalars().all()
+
+    # Step 4: Process the skills for this small, correctly paginated list.
+    employee_results = []
+    
+    # The `filter_skills` list is already built correctly at the beginning.
+    
+    for emp in employees:
+        # Fetch all skills + subskills + master skills for this specific employee.
+        # This part remains the same as it correctly fetches all related data for one employee.
+        stmt_skills = (
+            select(EmployeeSkill, SubSkill, MasterSkill)
+            .join(SubSkill, EmployeeSkill.subskill_id == SubSkill.subskill_id)
+            .join(MasterSkill, SubSkill.skill_id == MasterSkill.skill_id)
+            .filter(EmployeeSkill.employee_id == emp.id)
+        )
+        all_employee_skills = (await db.execute(stmt_skills)).all()
+
+        # Compute coverage
+        coverage = 0.0
+        if filter_skills:
+            coverage = await compute_skill_level_coverage(all_employee_skills, filter_skills)
+
+        skills_dict: dict[str, list] = {}
+
+        for emp_skill, subskill, master_skill in all_employee_skills:
+            key = master_skill.skill_name
+
+            # This inner loop also needs to handle the individual skills from the filter list.
+            if filter_skills:
+                matched = False
+                for f in filter_skills:
+                    if (
+                        f["skill_name"].lower() in master_skill.skill_name.lower()
+                        or f["skill_name"].lower() in subskill.subskill_name.lower()
+                    ) and (
+                        f.get("min_proficiency") is None or (emp_skill.proficiency or 0) >= f["min_proficiency"]
+                    ) and (
+                        f.get("min_experience") is None or (emp_skill.experience or 0) >= f["min_experience"]
+                    ) and (
+                        f.get("max_experience") is None or (emp_skill.experience or 0) <= f["max_experience"]
+                    ) and (
+                        f.get("require_certification") is None or (bool(emp_skill.certification) == f["require_certification"])
+                    ):
+                        matched = True
+                        break
+
+                if not matched:
+                    continue
+
+            if key not in skills_dict:
+                skills_dict[key] = []
+
+            skills_dict[key].append({
+                "name": subskill.subskill_name,
+                "proficiency": emp_skill.proficiency,
+                "experience": emp_skill.experience,
+                "hasCertification": bool(emp_skill.certification),
+                "status": emp_skill.status.value if emp_skill.status else "PENDING",
+                "certificationFile": emp_skill.certification,
+                "certificationCreationDate": getattr(emp_skill, "certification_creation_date", None),
+                "certificationExpirationDate": getattr(emp_skill, "certification_expiration_date", None),
+            })
+        
+        if not skills_dict:
+             continue
+
+        skills_info = []
+        for skill_name, subskills in skills_dict.items():
+            matched = len([s for s in subskills if s["proficiency"] is not None and s["proficiency"] > 0])
+            skills_info.append({
+                "skill_name": skill_name,
+                "matched_subskills": matched,
+                "total_subskills": len(subskills),
+                "sub_skills": subskills,
+            })
+
+        employee_results.append({
+            "employee_id": emp.emp_id,
+            "employee_name": emp.name,
+            "coverage": coverage,
+            "skills": skills_info,
+        })
+    
+    total_pages = (total_matching_employees + page_size - 1) // page_size
+
+    return {
+        "results": employee_results,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "total_employees": total_matching_employees,
+    }
+
+# # -------------------- export skills matching users -------------------- 
+@router.get("/matching/export")
+async def export_employee_skills(
+    skill: str | None = None,
+    proficiency: int | None = None,
+    min_experience: float | None = None,
+    max_experience: float | None = None,
+    has_certification: bool | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Export all employees (not paginated) with their grouped skills into Excel.
+    Applies main filters + table header filters.
+    """
+
+    # Build filter list
+    filter_skills = []
+    skill_list = []
+    if skill:
+        skill_list = [s.strip() for s in skill.split(",") if s.strip()]
+        for s in skill_list:
+            filter_skills.append({
+                "skill_name": s,
+                "min_proficiency": proficiency,
+                "min_experience": min_experience,
+                "max_experience": max_experience,
+                "require_certification": has_certification,
+            })
+
+    # ✅ Fetch all employees (no pagination here)
+    stmt = select(Employee).where(Employee.is_active == True)
+    result = await db.execute(stmt)
+    employees = result.scalars().all()
+
+    # Excel workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Employee Skills"
+
+    # Header row
+    headers = [
+        "Employee Name", "Employee ID",
+        "Skill", "Sub-skill",
+        "Proficiency", "Experience (yrs)",
+        "Certification", "Status",
+        "Coverage (%)"
+    ]
+    ws.append(headers)
+
+    # Style headers
+    for col in range(1, len(headers)+1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+
+    # Fill data
+    for emp in employees:
+        stmt_skills = (
+            select(EmployeeSkill, SubSkill, MasterSkill)
+            .join(SubSkill, EmployeeSkill.subskill_id == SubSkill.subskill_id)
+            .join(MasterSkill, SubSkill.skill_id == MasterSkill.skill_id)
+            .filter(EmployeeSkill.employee_id == emp.id)
+        )
+        all_employee_skills = (await db.execute(stmt_skills)).all()
+
+        if not all_employee_skills:
+            continue
+
+        # Compute coverage
+        coverage = 0.0
+        if filter_skills:
+            coverage = await compute_skill_level_coverage(all_employee_skills, filter_skills)
+
+        skills_dict = {}
+        for emp_skill, subskill, master_skill in all_employee_skills:
+            key = master_skill.skill_name
+
+            if key not in skills_dict:
+                skills_dict[key] = []
+
+            skills_dict[key].append({
+                "name": subskill.subskill_name,
+                "proficiency": emp_skill.proficiency,
+                "experience": emp_skill.experience,
+                "hasCertification": bool(emp_skill.certification),
+                "status": emp_skill.status.value if emp_skill.status else "PENDING",
+            })
+
+        # Skip employees with no matching subskills
+        if not skills_dict:
+            continue
+
+        first_row_for_employee = True
+        for skill_name, subskills in skills_dict.items():
+            first_row_for_skill = True
+            for sub in subskills:
+                row = [
+                    emp.name if first_row_for_employee else "",
+                    emp.emp_id if first_row_for_employee else "",
+                    skill_name if first_row_for_skill else "",
+                    sub["name"],
+                    sub["proficiency"],
+                    sub["experience"],
+                    "Certified" if sub["hasCertification"] else "Not Certified",
+                    sub["status"],
+                    coverage if first_row_for_employee else ""
+                ]
+                ws.append(row)
+                first_row_for_employee = False
+                first_row_for_skill = False
+
+        # Add empty row between employees
+        ws.append([])
+
+    # Save to BytesIO
+    file_stream = BytesIO()
+    wb.save(file_stream)
+    file_stream.seek(0)
+
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=employee_skills.xlsx"}
+    )
+
+
+
+@router.put("/update-skill/{record_type}/{record_id}")
+async def update_skill(
+    record_type: str,  # "employee_skill" or "history"
+    record_id: int,    # emp_skill_id or history_id
+    skill_data: SkillCreate = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: EmployeeAuthenticated = Depends(get_current_user)
+):
+    """
+    Update skill behavior based on record type:
+    - employee_skill: PENDING / APPROVED
+    - history: REJECTED
+    """
+
+    # Normalize record_type
+    record_type = record_type.lower()
+
+    # --------------------
+    # 1️⃣ Fetch existing record to populate the form
+    # --------------------
+    if record_type == "employee_skill":
+        result = await db.execute(
+            select(EmployeeSkill)
+            .where(EmployeeSkill.emp_skill_id == record_id)
+        )
+        record = result.scalars().first()
+        if not record:
+            raise HTTPException(status_code=404, detail="EmployeeSkill record not found")
+
+    elif record_type == "history":
+        result = await db.execute(
+            select(EmployeeSkillHistory)
+            .where(EmployeeSkillHistory.history_id == record_id)
+        )
+        record = result.scalars().first()
+        if not record:
+            raise HTTPException(status_code=404, detail="EmployeeSkillHistory record not found")
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid record_type")
+
+    # --------------------
+    # 2️⃣ Determine employee_id + subskill_id
+    # --------------------
+    employee_id = record.employee_id
+    subskill_id = record.subskill_id
+
+    # --------------------
+    # 3️⃣ Check if EmployeeSkill exists for REJECTED history
+    # --------------------
+    existing_emp_skill = None
+    if record_type == "history":
+        result = await db.execute(
+            select(EmployeeSkill).where(
+                EmployeeSkill.employee_id == employee_id,
+                EmployeeSkill.subskill_id == subskill_id
+            )
+        )
+        existing_emp_skill = result.scalars().first()
+
+    # --------------------
+    # 4️⃣ Update / Insert logic
+    # --------------------
+    target_skill = None
+
+    if record_type == "employee_skill" or existing_emp_skill:
+        # Update existing EmployeeSkill
+        target_skill = existing_emp_skill if existing_emp_skill else record
+        target_skill.experience = skill_data.sub_skills[0].experience
+        target_skill.proficiency = skill_data.sub_skills[0].employee_proficiency
+        target_skill.certification = skill_data.sub_skills[0].certification
+        target_skill.certification_creation_date = skill_data.sub_skills[0].certification_creation_date
+        target_skill.certification_expiration_date = skill_data.sub_skills[0].certification_expiration_date
+        target_skill.status = SkillStatus.PENDING
+
+    else:
+        # Insert new EmployeeSkill
+        new_skill = EmployeeSkill(
+            employee_id=employee_id,
+            subskill_id=subskill_id,
+            experience=skill_data.sub_skills[0].experience,
+            proficiency=skill_data.sub_skills[0].employee_proficiency,
+            certification=skill_data.sub_skills[0].certification,
+            certification_creation_date=skill_data.sub_skills[0].certification_creation_date,
+            certification_expiration_date=skill_data.sub_skills[0].certification_expiration_date,
+            status=SkillStatus.PENDING
+        )
+        db.add(new_skill)
+        target_skill = new_skill
+
+    await db.commit()
+    await db.refresh(target_skill)
+
+    return {
+        "message": "Skill updated successfully",
+        "employee_id": target_skill.employee_id,
+        "subskill_id": target_skill.subskill_id,
+        "status": target_skill.status.value
+    }

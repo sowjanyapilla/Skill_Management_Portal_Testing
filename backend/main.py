@@ -6,7 +6,7 @@ import uvicorn
 import os
 
 from database import engine, Base
-from routes import auth_router, users_router, skills_router
+from routes import auth_router, users_router, skills_router, approvals_router
 
 # Create database tables
 # Base.metadata.create_all(bind=engine)
@@ -37,7 +37,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(skills_router)
 app.include_router(users_router)
-# app.include_router(approvals_router)
+app.include_router(approvals_router)
 
 @app.get("/")
 async def root():

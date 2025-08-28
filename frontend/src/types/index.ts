@@ -1,12 +1,19 @@
 export interface User {
   id: number;
-  email: string;
+  emp_id: string;              // maps to backend's emp_id
   name: string;
-  employee_id: string;
-  is_manager: boolean;
-  manager_id: number | null;   // nullable because sometimes it can be null
-  created_at?: string;         // optional if not always included
-  avatar_url?: string;         // optional if you plan to add later
+  email: string;
+
+  approver_id: number | null;  // approver FK, nullable
+  is_approver: boolean;        // replaces is_manager
+
+  designation?: string | null; // optional
+  capability?: string | null;  // optional
+  is_active: boolean;
+  is_available: boolean;
+
+  created_at?: string;         // only if you add it in backend later
+  avatar_url?: string;         // optional frontend extension
 }
 
 
@@ -50,22 +57,27 @@ export interface SkillSubmission {
 }
 
 
-
 export interface SubSkillData {
-  id?: number;                  // for sub-skill id from backend
-  name: string;                 // fallback if creating a new sub-skill
+  id?: number;
+  name: string;
   proficiency: number;
   experience: number;
-  hasCertification: boolean;
-  certificationFile?: File;
+  hasCertification?: boolean;
+  status?: string;  
+  // Accept File OR string (URL) OR undefined
+  certificationFile?: File | string | null;
+  certificationCreationDate?: string | null;   // NEW
+  certificationExpirationDate?: string | null; // NEW
   employeeName?: string;
   employeeId?: string;
+  coverage?:number;
 }
 
 
 export interface SkillFilter {
   skill?: string;
   proficiency?: number;
-  experience?: number;
+  min_experience?: number;
+  max_experience?: number;
   hasCertification?: boolean;
 }
