@@ -4,11 +4,13 @@ from sqlalchemy import and_, or_, func, select, case, literal, desc, cast, Float
 from sqlalchemy.orm import selectinload, Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# import os
-# import json
-# from docx import Document
-# import PyPDF2
-# from groq import Groq
+
+import json
+from docx import Document
+import PyPDF2
+from groq import Groq
+from dotenv import load_dotenv
+
 
 from datetime import datetime
 from typing import Optional, List, Dict
@@ -18,6 +20,7 @@ from io import BytesIO
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 import re
+import os
 from fastapi.encoders import jsonable_encoder
 
 from database import get_db
@@ -1478,19 +1481,10 @@ async def get_all_skills_pg(session: AsyncSession = Depends(get_db)):
     return out
 
 
-import json
-import re
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import HTMLResponse, JSONResponse
-from docx import Document
-import PyPDF2
-from groq import Groq
-
-
 # Hardcoded API key - replace with your actual key
-GROQ_API_KEY = "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"
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
-
 
 def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
