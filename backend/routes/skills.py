@@ -1368,16 +1368,20 @@ async def update_employee_skill(request: EmployeeSkillUpdateRequest, db: AsyncSe
 
     if not skill_record:
         raise HTTPException(status_code=404, detail="Employee skill not found")
+    
+    is_experience_changed = skill_record.experience != request.experience_years
+    is_proficiency_changed = skill_record.proficiency != request.proficiency_level
 
-    # Update fields
+    if is_experience_changed or is_proficiency_changed:
+        skill_record.status = SkillStatus.PENDING
+        skill_record.manager_comments = None
+    
     skill_record.experience = request.experience_years
     skill_record.proficiency = request.proficiency_level
    
     skill_record.certification_file_url = getattr(request, "certification_file_url", None)
     skill_record.certification_creation_date = request.certification_creation_date
     skill_record.certification_expiration_date = request.certification_expiration_date
-    skill_record.status = SkillStatus.PENDING  # Reset status
-    skill_record.manager_comments = None
 
     # Commit and refresh
     await db.commit()
