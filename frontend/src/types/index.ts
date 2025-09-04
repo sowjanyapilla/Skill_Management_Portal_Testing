@@ -26,8 +26,11 @@ export interface Skill {
   manager_comments?: string;
   sub_skills: SubSkill[];  // always present from backend
 }
+
+
 export interface SubSkill {
   id: number;
+  history_id?: number;
   skill_id: number;
   sub_skill_name: string;
   proficiency_level: number;       // employee_proficiency
@@ -35,6 +38,11 @@ export interface SubSkill {
   has_certification: boolean;
   certification_file_url?: string;
   created_at: string;
+  skill_name?: string;
+  subskill_id?: number;
+
+  certification_creation_date?: string | null;
+  certification_expiration_date?: string | null;
 
   // Add manager-reviewed properties
   manager_proficiency?: number;    // optional
@@ -80,4 +88,23 @@ export interface SkillFilter {
   min_experience?: number;
   max_experience?: number;
   hasCertification?: boolean;
+}
+
+
+// Interface used specifically for UpdateSkillModal
+export interface SubSkillUpdate {
+  id?:number;
+  emp_skill_id?: number;
+  history_id?: number;
+  employee_id: number;
+  subskill_id: number;
+  skill_name: string | undefined;
+  sub_skill_name: string;         // unified naming
+  proficiency_level: number;      // use _level everywhere
+  experience_years: number;       // unified naming
+  has_certification: boolean;
+  certification_file_url?: string;
+  certification_creation_date?: string | null;
+  certification_expiration_date?: string | null;
+  status: "pending" | "approved" | "rejected";
 }

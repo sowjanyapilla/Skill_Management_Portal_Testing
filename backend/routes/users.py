@@ -7,7 +7,7 @@ from typing import List
 
 from database import get_db
 from models.user import Employee
-from schemas.user import EmployeeResponse, EmployeeProfile, EmployeeUpdate, EmployeeCreate
+from schemas.user import EmployeeResponse, EmployeeProfile, EmployeeUpdate, EmployeeCreate, EmployeeMinimalResponse
 from routes.auth import get_current_user  # async dependency
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -47,6 +47,30 @@ async def list_users(
     users = result.scalars().all()
     return [EmployeeResponse.model_validate(user) for user in users]
 
+@router.get("/approvers", response_model=List[EmployeeMinimalResponse])
+async def list_approvers(
+    db: AsyncSession = Depends(get_db),
+    search_term: str = Query("", description="Search for employees by name or ID"),
+):
+    """
+    Returns a minimal list of all employees for approver selection,
+    without pagination, and with an optional search filter.
+    """
+    query = select(Employee)
+    if search_term:
+        query = query.where(
+            or_(
+                Employee.name.ilike(f"%{search_term}%"),
+                Employee.emp_id.ilike(f"%{search_term}%")
+            )
+        )
+    
+    result = await db.execute(query)
+    employees = result.scalars().all()
+    
+    return [EmployeeMinimalResponse.model_validate(emp) for emp in employees]
+
+
 @router.get("/profile", response_model=EmployeeProfile)
 async def get_user_profile(current_user: Employee = Depends(get_current_user)):
     return EmployeeProfile.model_validate(current_user)
@@ -66,6 +90,7 @@ async def get_subordinates(
     subordinates = result.scalars().all()
     return [EmployeeResponse.model_validate(user) for user in subordinates]
 
+
 @router.post("/", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     employee: EmployeeCreate,
@@ -77,22 +102,30 @@ async def create_user(
         emp_id=employee.emp_id,
         name=employee.name,
         email=employee.email,
-        approver_id=getattr(employee, "approver_id", None),
-        is_approver=getattr(employee, "is_approver", False),
-        designation=getattr(employee, "designation", None),
-        capability=getattr(employee, "capability", None),
-        is_active=getattr(employee, "is_active", True),
-        is_available=getattr(employee, "is_available", True)
+        approver_id=employee.approver_id,
+        is_approver=employee.is_approver,
+        designation=employee.designation,
+        capability=employee.capability,
+        is_active=employee.is_active,
+        is_available=employee.is_available
     )
     db.add(new_user)
+    
+    # If an approver is specified, fetch and update their status
+    if employee.approver_id:
+        approver_to_update = await db.get(Employee, employee.approver_id)
+        if approver_to_update and not approver_to_update.is_approver:
+            approver_to_update.is_approver = True
+            # The session will track this change, and it will be committed below
+
     try:
         await db.commit()
         await db.refresh(new_user)
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Employee with this email or emp_id already exists")
+    
     return EmployeeResponse.model_validate(new_user)
-
 
 # -------------------- Update Employee --------------------
 @router.put("/{user_id}", response_model=EmployeeResponse)
@@ -134,7 +167,7 @@ async def delete_user(
     return
 
 # -------------------- Toggle Active Status --------------------
-@router.patch("/{user_id}/toggle", response_model=EmployeeResponse)
+@router.patch("/{user_id}/toggle-active-status", response_model=EmployeeResponse)
 async def toggle_active_status(
     user_id: int,
     db: AsyncSession = Depends(get_db),

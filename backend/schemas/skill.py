@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import datetime, date
 from models.skill import SkillStatus
@@ -8,14 +8,21 @@ from models.skill import SkillStatus
 class SubSkillBase(BaseModel):
     subskill_name: str
     employee_proficiency: int
-    experience_years: float
+    experience_years: float = Field(..., alias="experience")
     certification: Optional[str] = None
     certification_creation_date: Optional[date] = None
     certification_expiration_date: Optional[date] = None
+    approver_id: Optional[int] = None 
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class SubSkillCreate(SubSkillBase):
     pass
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class SubSkillResponse(BaseModel):
@@ -49,7 +56,6 @@ class SkillBase(BaseModel):
 class SkillCreate(SkillBase):
     sub_skills: List[SubSkillCreate]
 
-
 class SkillResponse(SkillBase):
     id: int
     user_id: int
@@ -61,6 +67,7 @@ class SkillResponse(SkillBase):
 
     class Config:
         from_attributes = True
+        use_enum_values = True 
 
 
 # -------------------- History --------------------
@@ -97,3 +104,90 @@ class SkillApprovalRequest(BaseModel):
     action: str  # "approve" or "reject"
     manager_comments: Optional[str] = None
     proficiency_modifications: Optional[Dict[int, int]] = None
+
+
+class EmployeeSkillUpdateRequest(BaseModel):
+    emp_skill_id: Optional[int] = None  # For pending/approved
+    history_id: Optional[int] = None    # For rejected
+    employee_id: int
+    subskill_id: int
+    experience_years: int
+    proficiency_level: int
+    certification: Optional[str] = None
+    certification_creation_date: Optional[date] = None
+    certification_expiration_date: Optional[date] = None
+    emp_skill_id: Optional[int] = None
+    history_id: Optional[int] = None
+
+class EmployeeSkillResponse(BaseModel):
+    employee_id: int
+    subskill_id: int
+    skill_name: str
+    subskill_name: str
+    experience: Optional[int] = None
+    proficiency: Optional[int] = None
+    certification: Optional[str] = None
+    certification_creation_date: Optional[str] = None
+    certification_expiration_date: Optional[str] = None
+    status: str
+
+    class Config:
+        orm_mode = True
+
+
+class SubSkillSchema(BaseModel):
+    subskill_id: int
+    skill_id: int
+    subskill_name: str
+
+    class Config:
+        orm_mode = True
+
+class MasterSkillSchema(BaseModel):
+    skill_id: int
+    skill_name: str
+    subskills: List[SubSkillSchema] = []
+
+    class Config:
+        orm_mode = True
+
+class PaginatedMasterSkills(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    master_skills: List[MasterSkillSchema]
+
+class SubSkillCreate(BaseModel):
+    subskill_name: str
+
+class MasterSkillCreate(BaseModel):
+    skill_name: str
+    sub_skills: List[SubSkillCreate]
+
+class SubSkillUpdate(BaseModel):
+    subskill_name: Optional[str] = None
+    proficiency_level: Optional[int] = None
+
+class SkillUpdate(BaseModel):
+    skill_name: Optional[str] = None
+    sub_skills: Optional[List[SubSkillUpdate]] = None  # <-- Make optional
+
+class MasterSkillSubSkillCreate(BaseModel):
+    skill_id: int
+    subskill_name: str
+
+
+# ---------- Pydantic request model ----------
+class SubskillRequirement(BaseModel):
+    subskill_id: int
+    min_experience: Optional[float] = None
+    max_experience: Optional[float] = None
+    min_proficiency: Optional[int] = None
+    require_certification: Optional[bool] = None
+
+
+class MatchingRequest(BaseModel):
+    requirements: Optional[List[SubskillRequirement]] = []
+
+class ExportRequest(BaseModel):
+    requirements: Optional[List[SubskillRequirement]] = []

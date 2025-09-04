@@ -1,599 +1,1807 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, Star, Award } from 'lucide-react';
-import { User } from '../types';
+
+
+// import React, { useEffect, useMemo, useRef, useState } from "react";
+// import { Search, Star } from "lucide-react";
+
+// type User = any;
+
+// interface SkillMatchingTabProps {
+//   user?: User;
+// }
+
+// interface SubSkillOption {
+//   id: number;
+//   name: string;
+//   master_skill?: string;
+// }
+
+// interface SubSkillRequirement {
+//   subskill_id: number;
+//   min_proficiency?: number | null;
+//   min_experience?: number | null;
+//   max_experience?: number | null;
+//   require_certification?: boolean | null;
+// }
+
+// interface SubskillData {
+//   name: string;
+//   proficiency?: number | null;
+//   experience?: number | null;
+//   hasCertification?: boolean;
+//   status?: string;
+//   certificationFile?: string | null;
+//   certificationCreationDate?: string | null;
+//   certificationExpirationDate?: string | null;
+//   employee_name?: string;
+//   employee_id?: string;
+//   skill_name?: string;
+//   coverage?: number;
+//   score?: number;
+//   subskill_id?: number;
+// }
+
+// interface SkillData {
+//   skill_name: string;
+//   matched_subskills: number;
+//   total_subskills: number;
+//   sub_skills: SubskillData[];
+// }
+
+// interface EmployeeData {
+//   employee_id: string;
+//   employee_name: string;
+//   score: number;
+//   coverage: number;
+//   skills: SkillData[];
+// }
+
+// export default function SkillMatchingTab(_: SkillMatchingTabProps) {
+//   // data/state
+//   const [allSubskills, setAllSubskills] = useState<SubSkillOption[]>([]);
+//   const [searchInput, setSearchInput] = useState("");
+//   const [suggestions, setSuggestions] = useState<SubSkillOption[]>([]);
+//   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+//   const [selectedRequirements, setSelectedRequirements] = useState<
+//     SubSkillRequirement[]
+//   >([]);
+//   const [unmatchedCandidates, setUnmatchedCandidates] = useState<
+//     { phrase: string; skill?: string }[]
+//   >([]);
+
+//   const [page, setPage] = useState(1);
+//   const [pageSize] = useState(5); // employees per page
+//   const [totalPages, setTotalPages] = useState(1);
+
+//   const [loading, setLoading] = useState(false);
+//   const [results, setResults] = useState<EmployeeData[]>([]);
+
+//   // header filters (table-level)
+//   const [headerCertFilter, setHeaderCertFilter] = useState<"" | "true" | "false">("");
+//   const [headerStatusFilter, setHeaderStatusFilter] = useState<"" | string>("");
+
+//   const containerRef = useRef<HTMLDivElement | null>(null);
+//   const inputRef = useRef<HTMLInputElement | null>(null);
+//   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+//   // fetch subskills list once
+//   useEffect(() => {
+//     const fetchSubskills = async () => {
+//       try {
+//         const res = await fetch(
+//           `${import.meta.env.VITE_BACKEND_URL}/skills/subskills`
+//         );
+//         if (!res.ok) throw new Error("Failed to load subskills");
+//         const json = await res.json();
+//         // expect items like {id, name, master_skill?}
+//         setAllSubskills(json || []);
+//       } catch (err) {
+//         console.error("Failed to load subskills", err);
+//       }
+//     };
+//     fetchSubskills();
+//   }, []);
+
+//   // default search on mount (no requirements) — shows initial results
+//   useEffect(() => {
+//     const t = setTimeout(() => fetchResults(1), 120);
+//     return () => clearTimeout(t);
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []);
+
+//   // suggestions (debounced) — match master_skill + subskill name
+//   useEffect(() => {
+//     if (!searchInput) {
+//       setSuggestions([]);
+//       setIsSuggestionsOpen(false);
+//       return;
+//     }
+//     const t = setTimeout(() => {
+//       const q = searchInput.trim().toLowerCase();
+//       const filtered = allSubskills.filter((s) => {
+//         const combined = `${(s.master_skill ?? "")} ${s.name}`.toLowerCase();
+//         return combined.includes(q);
+//       });
+//       setSuggestions(filtered.slice(0, 7));
+//       setIsSuggestionsOpen(true);
+//     }, 120);
+//     return () => clearTimeout(t);
+//   }, [searchInput, allSubskills]);
+
+//   // click outside closes suggestions
+//   useEffect(() => {
+//     const onDoc = (e: MouseEvent) => {
+//       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+//         setIsSuggestionsOpen(false);
+//       }
+//     };
+//     document.addEventListener("click", onDoc);
+//     return () => document.removeEventListener("click", onDoc);
+//   }, []);
+
+//   // add selected subskill
+//   const addRequirement = (sub: SubSkillOption) => {
+//     if (!selectedRequirements.some((r) => r.subskill_id === sub.id)) {
+//       setSelectedRequirements((prev) => [
+//         ...prev,
+//         {
+//           subskill_id: Number(sub.id),
+//           min_proficiency: null,
+//           min_experience: null,
+//           max_experience: null,
+//           require_certification: null,
+//         },
+//       ]);
+//     }
+//     setSearchInput("");
+//     setSuggestions([]);
+//     setIsSuggestionsOpen(false);
+//     inputRef.current?.focus();
+//   };
+
+//   const removeRequirement = (id: number) => {
+//     setSelectedRequirements((reqs) => reqs.filter((r) => r.subskill_id !== id));
+//   };
+
+//   // update requirement field (keeps values compact)
+//   const updateRequirement = (
+//     id: number,
+//     field: keyof SubSkillRequirement,
+//     value: any
+//   ) => {
+//     setSelectedRequirements((reqs) =>
+//       reqs.map((r) =>
+//         r.subskill_id === id
+//           ? {
+//               ...r,
+//               [field]:
+//                 value === "" || value === null || value === undefined
+//                   ? null
+//                   : field === "require_certification"
+//                   ? Boolean(value)
+//                   : Number(value),
+//             }
+//           : r
+//       )
+//     );
+//   };
+
+//   // === New: experience options (1..10 + 10+ => 11) ===
+//   const expOptions = [...Array(10)].map((_, i) => i + 1); // 1..10
+//   // We'll render 1..10 and "10+" option; when user picks 10+ we'll set value = 11
+
+//   // build payload for backend (omit undefined fields)
+//   const buildPayload = () => {
+//     return {
+//       requirements: selectedRequirements.map((r) => {
+//         const out: any = { subskill_id: Number(r.subskill_id) };
+//         if (r.min_proficiency != null) out.min_proficiency = Number(r.min_proficiency);
+//         if (r.min_experience != null) out.min_experience = Number(r.min_experience)*12;
+//         if (r.max_experience != null) out.max_experience = Number(r.max_experience)*12;
+//         if (r.require_certification != null)
+//           out.require_certification = Boolean(r.require_certification);
+//         return out;
+//       }),
+//     };
+//   };
+
+//   // fetch results from backend using POST (matching endpoint)
+//   const fetchResults = async (pageToUse = page) => {
+//     setLoading(true);
+//     try {
+//       const token = localStorage.getItem("token");
+//       const payload = buildPayload();
+//       console.debug("POST payload:", payload);
+
+//       const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching?page=${pageToUse}&page_size=${pageSize}`;
+
+//       const res = await fetch(url, {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//         },
+//         body: JSON.stringify(payload),
+//       });
+
+//       if (!res.ok) {
+//         const txt = await res.text();
+//         console.error("Server responded", res.status, txt);
+//         throw new Error(txt || "Server error");
+//       }
+
+//       const json = await res.json();
+//       setResults(json.results || []);
+//       setTotalPages(json.total_pages || 1);
+//       setPage(json.page || pageToUse);
+//     } catch (err) {
+//       console.error("Fetch error:", err);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // called when user clicks Search
+//   const handleSearch = () => {
+//     setPage(1);
+//     fetchResults(1);
+//   };
+
+//   // Export to Excel (POST export endpoint)
+//   const handleExport = async () => {
+//     try {
+//       const token = localStorage.getItem("token");
+//       const payload = buildPayload();
+//       const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching/export`;
+//       const res = await fetch(url, {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//         },
+//         body: JSON.stringify(payload),
+//       });
+//       if (!res.ok) throw new Error("Export failed");
+//       const blob = await res.blob();
+//       const href = URL.createObjectURL(blob);
+//       const a = document.createElement("a");
+//       a.href = href;
+//       a.download = "employee_skills.xlsx";
+//       document.body.appendChild(a);
+//       a.click();
+//       a.remove();
+//       URL.revokeObjectURL(href);
+//     } catch (err) {
+//       console.error("Export error:", err);
+//     }
+//   };
+
+//   // === UPDATED: real file upload handler (calls backend) ===
+//   const handleFileUpload = async (file?: File) => {
+//     if (!file) return;
+//     setLoading(true);
+//     try {
+//       const token = localStorage.getItem("token");
+//       const fd = new FormData();
+//       fd.append("file", file);
+
+//       const url = `${import.meta.env.VITE_BACKEND_URL}/skills/upload_jd`;
+//       const res = await fetch(url, {
+//         method: "POST",
+//         headers: {
+//           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+//           // DO NOT set Content-Type here; browser sets multipart boundary
+//         },
+//         body: fd,
+//       });
+
+//       if (!res.ok) {
+//         const txt = await res.text();
+//         throw new Error(`Upload failed: ${res.status} ${txt}`);
+//       }
+
+//       const json = await res.json();
+//       // Expecting shape like the example you gave:
+//       // { structured_data: [...], unmatched_skills: [...] }
+
+//       const structured = Array.isArray(json.structured_data) ? json.structured_data : [];
+//       const unmatched = Array.isArray(json.unmatched_skills) ? json.unmatched_skills : [];
+
+//       const newSelected: SubSkillRequirement[] = [];
+//       const newUnmatched: { phrase: string; skill?: string }[] = [];
+
+      
+// const findSubskillCandidate = (subSkillName: string, skillName?: string) => {
+//   if (!subSkillName) return { found: undefined, ambiguous: false, candidates: [] };
+//   const sLower = subSkillName.trim().toLowerCase();
+//   const skillLower = (skillName ?? "").trim().toLowerCase();
+
+//   // 1) exact name match (case-insensitive)
+//   const exactMatches = allSubskills.filter(s => s.name.trim().toLowerCase() === sLower);
+//   if (exactMatches.length === 1) return { found: exactMatches[0], ambiguous: false, candidates: exactMatches };
+
+//   // 2) if multiple exact matches and LLM provided a skill, filter exactMatches by master_skill match
+//   if (exactMatches.length > 1 && skillName) {
+//     const masterMatches = exactMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase() === skillLower);
+//     if (masterMatches.length === 1) return { found: masterMatches[0], ambiguous: false, candidates: masterMatches };
+//     if (masterMatches.length > 1) return { found: masterMatches[0], ambiguous: true, candidates: masterMatches };
+//     // next try contains check
+//     const masterContains = exactMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase().includes(skillLower) || skillLower.includes((s.master_skill ?? "").trim().toLowerCase()));
+//     if (masterContains.length === 1) return { found: masterContains[0], ambiguous: false, candidates: masterContains };
+//     if (masterContains.length > 1) return { found: masterContains[0], ambiguous: true, candidates: masterContains };
+//   }
+
+//   // 3) substring match on name (if no exact matches)
+//   const substrMatches = allSubskills.filter(s => {
+//     const combined = `${(s.master_skill ?? "")} ${(s.name ?? "")}`.trim().toLowerCase();
+//     return s.name.trim().toLowerCase().includes(sLower) || sLower.includes(s.name.trim().toLowerCase()) || combined.includes(sLower);
+//   });
+//   if (substrMatches.length === 1) return { found: substrMatches[0], ambiguous: false, candidates: substrMatches };
+
+//   // 4) if many candidates and LLM skill provided, prefer those with master_skill matching/containing skillLower
+//   if (substrMatches.length > 1 && skillName) {
+//     const preferByMaster = substrMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase() === skillLower);
+//     if (preferByMaster.length === 1) return { found: preferByMaster[0], ambiguous: false, candidates: preferByMaster };
+//     if (preferByMaster.length > 1) return { found: preferByMaster[0], ambiguous: true, candidates: preferByMaster };
+
+//     const preferContains = substrMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase().includes(skillLower) || skillLower.includes((s.master_skill ?? "").trim().toLowerCase()));
+//     if (preferContains.length === 1) return { found: preferContains[0], ambiguous: false, candidates: preferContains };
+//     if (preferContains.length > 1) return { found: preferContains[0], ambiguous: true, candidates: preferContains };
+//   }
+
+//   // 5) fallback: if there are candidates return the first but mark ambiguous, else nothing
+//   if (exactMatches.length > 0) return { found: exactMatches[0], ambiguous: exactMatches.length > 1, candidates: exactMatches };
+//   if (substrMatches.length > 0) return { found: substrMatches[0], ambiguous: substrMatches.length > 1, candidates: substrMatches };
+
+//   return { found: undefined, ambiguous: false, candidates: [] };
+// };
+
+// // --- inside handleFileUpload, for each item from `structured` ---
+// for (const item of structured) {
+//   const skillFromLLM = (item.skill ?? "").toString();
+//   const subFromLLM = (item.sub_skill ?? "").toString();
+
+//   const { found, ambiguous, candidates } = findSubskillCandidate(subFromLLM, skillFromLLM);
+
+//   if (found) {
+//     // parse numbers (handle "10+" strings if any)
+//     const parseExp = (v: any) => {
+//       if (v == null) return null;
+//       if (typeof v === "string" && v.trim().endsWith("+")) {
+//         const num = parseFloat(v.replace("+", "").trim());
+//         return Number.isFinite(num) ? 11 : null; // 11 means "10+"
+//       }
+//       const n = Number(v);
+//       return Number.isFinite(n) ? n : null;
+//     };
+
+//     newSelected.push({
+//       subskill_id: Number(found.id),
+//       min_proficiency: item.min_proficiency == null ? null : Number(item.min_proficiency),
+//       min_experience: parseExp(item.min_experience),
+//       max_experience: parseExp(item.max_experience),
+//       require_certification: item.required_certification == null ? null : Boolean(item.required_certification),
+//     });
+
+//     if (ambiguous) {
+//       // push an ambiguity notice (so UI can show it)
+//       newUnmatched.push({
+//         phrase: subFromLLM || skillFromLLM || "Unknown",
+//         skill: skillFromLLM || undefined,
+//         ambiguous: true,
+//         candidates: candidates.map(c => ({ id: c.id, name: c.name, master_skill: c.master_skill }))
+//       });
+//     }
+//   } else {
+//     // no match -> unmatched (keep skill+subskill so user sees context)
+//     newUnmatched.push({
+//       phrase: subFromLLM || skillFromLLM || "Unknown",
+//       skill: skillFromLLM || undefined
+//     });
+//   }
+// }
+
+
+//       // Also treat unmatched array returned by backend (strings) — push as unmatched candidates
+//       for (const u of unmatched) {
+//         // if u is object or string - handle both
+//         if (typeof u === "string") {
+//           newUnmatched.push({ phrase: u });
+//         } else if (u && typeof u === "object") {
+//           // e.g. { skill: "X", sub_skill: "Y" }
+//           newUnmatched.push({ phrase: (u.sub_skill ?? u.phrase ?? ""), skill: u.skill ?? undefined });
+//         }
+//       }
+
+//       // replace previous selected requirements entirely with newSelected
+//       setSelectedRequirements(() => [...newSelected]);
+
+//       // replace previous unmatched candidates with newUnmatched (deduplicated)
+//       setUnmatchedCandidates(() => {
+//         const map = new Map<string, { id?: number; phrase: string; skill?: string }>();
+//         newUnmatched.forEach(u => {
+//           const key = `${u.skill ?? ""}||${u.phrase}`.toLowerCase();
+//           if (!map.has(key)) map.set(key, u);
+//         });
+//         return Array.from(map.values());
+//       });
+
+
+//       // focus UX
+//       setIsSuggestionsOpen(false);
+//     } catch (err) {
+//       console.error("File parsing/upload error:", err);
+//       alert(`Upload failed: ${String(err)}`);
+//     } finally {
+//       // reset file input so same file can be re-uploaded
+//       if (fileInputRef.current) fileInputRef.current.value = "";
+//       setLoading(false);
+//     }
+//   };
+
+//   // Handler wired to file input change
+//   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+//     const f = e.target.files?.[0];
+//     if (!f) return;
+//     handleFileUpload(f);
+//   };
+
+//   // Flatten and group for table rendering
+//   const flattenedSubSkills: SubskillData[] = useMemo(() => {
+//     return results.flatMap((emp) =>
+//       emp.skills.flatMap((skill) =>
+//         skill.sub_skills.map((sub) => ({
+//           ...sub,
+//           employee_name: emp.employee_name,
+//           employee_id: emp.employee_id,
+//           skill_name: skill.skill_name,
+//           coverage: emp.coverage,
+//           score: emp.score,
+//           subskill_id: sub.subskill_id,
+//         }))
+//       )
+//     );
+//   }, [results]);
+
+//   // apply header filters to flattenedSubSkills
+//   const filteredSubSkills = useMemo(() => {
+//     let arr = [...flattenedSubSkills];
+//     if (headerCertFilter !== "") {
+//       const want = headerCertFilter === "true";
+//       arr = arr.filter(s => Boolean(s.hasCertification) === want);
+//     }
+//     if (headerStatusFilter) {
+//       arr = arr.filter(s => (s.status || "").toLowerCase() === headerStatusFilter.toLowerCase());
+//     }
+//     return arr;
+//   }, [flattenedSubSkills, headerCertFilter, headerStatusFilter]);
+
+//   const groupedByEmployee = useMemo(() => {
+//     const map: Record<string, EmployeeData> = {};
+//     filteredSubSkills.forEach((sub) => {
+//       const empId = sub.employee_id ?? "unknown";
+//       if (!map[empId]) {
+//         map[empId] = {
+//           employee_id: sub.employee_id || empId,
+//           employee_name: sub.employee_name || "Unknown",
+//           score: sub.score ?? 0,
+//           coverage: sub.coverage ?? 0,
+//           skills: [],
+//         };
+//       }
+//       let skillObj = map[empId].skills.find((s) => s.skill_name === sub.skill_name);
+//       if (!skillObj) {
+//         skillObj = {
+//           skill_name: sub.skill_name || "Unknown",
+//           matched_subskills: 0,
+//           total_subskills: 0,
+//           sub_skills: [],
+//         };
+//         map[empId].skills.push(skillObj);
+//       }
+//       skillObj.sub_skills.push(sub);
+//       skillObj.total_subskills++;
+//       if ((sub.proficiency ?? 0) > 0) skillObj.matched_subskills++;
+//     });
+//     return Object.values(map);
+//   }, [filteredSubSkills]);
+
+//   const getEmployeeRowSpan = (emp: EmployeeData) =>
+//     emp.skills.reduce((acc, s) => acc + Math.max(1, s.sub_skills.length), 0);
+
+//   const renderStars = (proficiency?: number | null) => {
+//     const p = proficiency ?? 0;
+//     return (
+//       <div className="flex items-center space-x-1">
+//         {[0, 1, 2, 3, 4].map((i) => (
+//           <Star
+//             key={i}
+//             className={`w-3 h-3 ${i < p ? "text-yellow-400" : "text-gray-300"}`}
+//           />
+//         ))}
+//         <span className="text-xs text-gray-600 ml-1">({p}/5)</span>
+//       </div>
+//     );
+//   };
+
+//   return (
+//     <div className="p-4">
+//       {/* Compact add-subskill UI */}
+//       <div className="bg-white p-2 rounded shadow-sm mb-4">
+//         <div className="flex items-center gap-2">
+//           <div className="relative flex-1" ref={containerRef}>
+//             <div className="flex items-center gap-2">
+//               <Search className="absolute left-2 top-2 text-gray-400 w-4 h-4" />
+//               <input
+//                 ref={inputRef}
+//                 className="w-full pl-8 pr-2 py-1 text-sm border rounded"
+//                 placeholder="Search skill/subskills..."
+//                 value={searchInput}
+//                 onChange={(e) => setSearchInput(e.target.value)}
+//               />
+//               <button
+//                 className="text-sm px-2 py-0.5 bg-gray-100 rounded"
+//                 onClick={() => {
+//                   setSearchInput("");
+//                   setIsSuggestionsOpen(false);
+//                 }}
+//                 title="Clear"
+//               >
+//                 Clear
+//               </button>
+//             </div>
+
+//             {/* suggestions overlay - fixed height so won't push content */}
+//             {isSuggestionsOpen && suggestions.length > 0 && (
+//               <ul className="absolute left-0 right-0 z-50 bg-white border rounded mt-1 max-h-36 overflow-auto shadow-sm text-sm">
+//                 {suggestions.map((s) => (
+//                   <li
+//                     key={s.id}
+//                     onClick={() => addRequirement(s)}
+//                     className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+//                   >
+//                     <span className="font-medium">{s.master_skill ?? "—"}</span>
+//                     <span className="text-gray-600"> — {s.name}</span>
+//                   </li>
+//                 ))}
+//               </ul>
+//             )}
+//           </div>
+
+//           <div className="flex gap-2">
+//             <button
+//               onClick={handleSearch}
+//               className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+//             >
+//               {loading ? "Searching..." : "Search"}
+//             </button>
+
+//             {/* Upload JD */}
+//             <div className="flex items-center gap-2">
+//               <input
+//                 ref={fileInputRef}
+//                 type="file"
+//                 accept=".pdf,.docx,.txt"
+//                 onChange={onFileChange}
+//                 className="text-xs"
+//                 id="jd-upload"
+//                 style={{ display: "none" }}
+//               />
+//               <label htmlFor="jd-upload" className="px-3 py-1 bg-indigo-600 text-white rounded text-sm cursor-pointer">
+//                 Upload JD
+//               </label>
+//             </div>
+
+//             <button
+//               onClick={() => {
+//                 setSelectedRequirements([]);
+//                 setResults([]);
+//                 setPage(1);
+//                 setUnmatchedCandidates([]);
+//               }}
+//               className="px-3 py-1 bg-gray-100 rounded text-sm"
+//             >
+//               Clear All Filters
+//             </button>
+
+//             <button
+//               onClick={handleExport}
+//               className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+//             >
+//               Export
+//             </button>
+//           </div>
+//         </div>
+
+//         {/* Selected requirements - compact rows, label and input side-by-side */}
+//         <div className="mt-2 space-y-2">
+//           {/* show unmatched candidates */}
+//           {unmatchedCandidates.length > 0 && (
+//             <div className="flex flex-wrap gap-2 mb-1">
+//               {unmatchedCandidates.map((u, idx) => (
+//                 <div key={idx} className="text-xs px-2 py-0.5 bg-red-100 text-red-800 rounded">
+//                   Not found: <strong>{u.phrase}</strong>{u.skill ? ` (skill: ${u.skill})` : ""}
+//                 </div>
+//               ))}
+//             </div>
+//           )}
+
+//           {selectedRequirements.map((req) => {
+//             const sub = allSubskills.find((s) => s.id === req.subskill_id);
+//             const displayLabel = sub ? `${sub.master_skill ?? "—"} - ${sub.name}` : `Subskill ${req.subskill_id}`;
+
+//             return (
+//               <div
+//                 key={req.subskill_id}
+//                 className="w-full bg-gray-50 border rounded p-1 grid grid-cols-12 gap-2 items-center text-sm"
+//               >
+//                 <div className="col-span-4 font-medium text-sm truncate">{displayLabel}</div>
+
+//                 {/* Min Prof Dropdown */}
+//                 <div className="col-span-2 flex items-center gap-2">
+//                   <label className="text-xs text-gray-600 w-14">Min Prof</label>
+//                   <select
+//                     className="w-full px-2 py-0.5 text-sm border rounded"
+//                     value={req.min_proficiency == null ? "" : String(req.min_proficiency)}
+//                     onChange={(e) => {
+//                       const v = e.target.value === "" ? null : Number(e.target.value);
+//                       updateRequirement(req.subskill_id, "min_proficiency", v);
+//                     }}
+//                   >
+//                     <option value="">Any</option>
+//                     {[1, 2, 3, 4, 5].map((o) => (
+//                       <option key={o} value={o}>{o}</option>
+//                     ))}
+//                   </select>
+//                 </div>
+
+//                 {/* Min Exp Dropdown */}
+//                 <div className="col-span-2 flex items-center gap-2">
+//                   <label className="text-xs text-gray-600 w-14">Min Exp</label>
+//                   <select
+//                     className="w-full px-2 py-0.5 text-sm border rounded"
+//                     value={req.min_experience == null ? "" : String(req.min_experience === 11 ? 11 : req.min_experience)}
+//                     onChange={(e) => {
+//                       const v = e.target.value === "" ? null : (e.target.value === "11" ? 11 : Number(e.target.value));
+//                       updateRequirement(req.subskill_id, "min_experience", v);
+//                     }}
+//                   >
+//                     <option value="">Any</option>
+//                     {expOptions.map((o) => (
+//                       <option key={o} value={o}>{o}</option>
+//                     ))}
+//                     <option value="11">10+</option>
+//                   </select>
+//                 </div>
+
+//                 {/* Max Exp Dropdown */}
+//                 <div className="col-span-2 flex items-center gap-2">
+//                   <label className="text-xs text-gray-600 w-14">Max Exp</label>
+//                   <select
+//                     className="w-full px-2 py-0.5 text-sm border rounded"
+//                     value={req.max_experience == null ? "" : String(req.max_experience === 11 ? 11 : req.max_experience)}
+//                     onChange={(e) => {
+//                       const v = e.target.value === "" ? null : (e.target.value === "11" ? 11 : Number(e.target.value));
+//                       updateRequirement(req.subskill_id, "max_experience", v);
+//                     }}
+//                   >
+//                     <option value="">Any</option>
+//                     {expOptions.map((o) => (
+//                       <option key={o} value={o}>{o}</option>
+//                     ))}
+//                     <option value="11">10+</option>
+//                   </select>
+//                 </div>
+
+//                 <div className="col-span-1 flex items-center gap-1">
+//                   <label className="text-xs text-gray-600 w-20">Certification</label>
+//                   <input
+//                     type="checkbox"
+//                     checked={Boolean(req.require_certification)}
+//                     onChange={(e) =>
+//                       updateRequirement(req.subskill_id, "require_certification", e.target.checked)
+//                     }
+//                   />
+//                 </div>
+
+//                 <div className="col-span-1 text-right">
+//                   <button
+//                     onClick={() => removeRequirement(req.subskill_id)}
+//                     title="Remove"
+//                     className="text-red-600 hover:text-red-800 text-sm px-2 py-0.5 border border-transparent rounded bg-transparent"
+//                   >
+//                     Remove
+//                   </button>
+//                 </div>
+//               </div>
+//             );
+//           })}
+//         </div>
+//       </div>
+
+//       {/* Results table (grouped by employee -> skill -> subskills) */}
+//       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-auto">
+//         <div className="px-4 py-3 border-b">
+//           <div className="flex justify-between items-center">
+//             <h3 className="text-sm font-medium">Matching Sub-skills</h3>
+//             <div className="text-xs text-gray-600">Page {page} of {totalPages}</div>
+//           </div>
+//         </div>
+
+//         <div className="overflow-x-auto">
+//           <table className="min-w-full divide-y divide-gray-200 text-xs">
+//             <thead className="bg-gray-100">
+//               <tr>
+//                 <th className="px-3 py-2 text-left font-semibold">Employee Name</th>
+//                 <th className="px-3 py-2 text-left font-semibold">Employee Id</th>
+//                 <th className="px-3 py-2 text-left font-semibold">Skill</th>
+//                 <th className="px-3 py-2 text-left font-semibold">Sub-skill</th>
+//                 <th className="px-3 py-2 text-left font-semibold">Proficiency</th>
+//                 <th className="px-3 py-2 text-left font-semibold">Experience</th>
+
+//                 {/* Certification header with dropdown filter */}
+//                 <th className="px-3 py-2 text-left font-semibold ">
+//                   <div className="flex items-center gap-2">
+//                     <span>Certification</span>
+//                     <select
+//                       className="mt-1 w-5 px-1 py-0.5 border border-gray-300 rounded text-xs"
+//                       value={headerCertFilter}
+//                       onChange={(e) => setHeaderCertFilter(e.target.value as "" | "true" | "false")}
+//                     >
+//                       <option value="">All</option>
+//                       <option value="true">Required</option>
+//                       <option value="false">Not Required</option>
+//                     </select>
+//                   </div>
+//                 </th>
+
+//                 {/* Status header with dropdown filter */}
+//                 <th className="px-3 py-2 text-left font-semibold">
+//                   <div className="flex items-center gap-2">
+//                     <span>Status</span>
+//                     <select
+//                       className="mt-1 w-5 px-1 py-0.5 border border-gray-300 rounded text-xs"
+//                       value={headerStatusFilter}
+//                       onChange={(e) => setHeaderStatusFilter(e.target.value)}
+//                     >
+//                       <option value="">All</option>
+//                       <option value="APPROVED">APPROVED</option>
+//                       <option value="PENDING">PENDING</option>
+//                       <option value="REJECTED">REJECTED</option>
+//                     </select>
+//                   </div>
+//                 </th>
+
+//                 <th className="px-3 py-2 text-left font-semibold">Score / Coverage</th>
+//               </tr>
+//             </thead>
+
+//             <tbody className="bg-white divide-y divide-gray-200">
+//               {groupedByEmployee.map((emp) =>
+//                 emp.skills.flatMap((skill, skillIndex) => {
+//                   const subSkills = skill.sub_skills.length
+//                     ? skill.sub_skills
+//                     : [
+//                         {
+//                           name: "-",
+//                           proficiency: 0,
+//                           experience: 0,
+//                           hasCertification: false,
+//                           status: "-",
+//                         },
+//                       ];
+
+//                   return subSkills.map((sub, idx) => {
+//                     const showEmployeeCell = idx === 0 && skillIndex === 0;
+//                     const employeeRowSpan = getEmployeeRowSpan(emp);
+//                     return (
+//                       <tr
+//                         key={`${emp.employee_id}-${skill.skill_name}-${idx}`}
+//                         className="text-xs even:bg-white odd:bg-white"
+//                       >
+//                         {showEmployeeCell && (
+//                           <>
+//                             <td
+//                               rowSpan={employeeRowSpan}
+//                               className="px-3 py-1 text-xs font-medium align-top"
+//                             >
+//                               {emp.employee_name}
+//                             </td>
+//                             <td
+//                               rowSpan={employeeRowSpan}
+//                               className="px-3 py-1 text-xs align-top"
+//                             >
+//                               {emp.employee_id}
+//                             </td>
+//                           </>
+//                         )}
+
+//                         {idx === 0 && (
+//                           <td
+//                             rowSpan={subSkills.length}
+//                             className="px-3 py-1 text-xs font-medium align-top"
+//                           >
+//                             {skill.skill_name}
+//                           </td>
+//                         )}
+
+//                         <td className="px-3 py-1 text-xs align-top">{sub.name}</td>
+
+//                         <td className="px-3 py-1 text-xs align-top">
+//                           {renderStars(sub.proficiency)}
+//                         </td>
+
+//                         <td className="px-3 py-1 text-xs align-top">
+//                           {sub.experience? `${Math.floor(sub.experience / 12)}Y, ${sub.experience % 12}m`: "-"}
+
+//                         </td>
+
+//                         <td className="px-3 py-1 text-xs align-top">
+//                           {sub.hasCertification ? "Certified" : "Not Certified"}
+//                         </td>
+
+//                         <td className="px-3 py-1 text-xs align-top">
+//                           {sub.status ?? "-"}
+//                         </td>
+
+//                         {showEmployeeCell && (
+//                           <td
+//                             rowSpan={employeeRowSpan}
+//                             className={`px-3 py-1 text-xs font-semibold text-center align-top`}
+//                           >
+//                             <div className="text-sm font-medium">{emp.score ?? "-"}</div>
+//                             <div className="text-xs text-gray-600">{emp.coverage ?? "-"}%</div>
+//                           </td>
+//                         )}
+//                       </tr>
+//                     );
+//                   });
+//                 })
+//               )}
+//             </tbody>
+//           </table>
+//         </div>
+
+//         {/* pagination controls centered */}
+//         <div className="px-4 py-3 border-t bg-gray-50">
+//           <div className="flex justify-center items-center gap-3">
+//             <button
+//               disabled={page <= 1}
+//               onClick={() => {
+//                 const p = Math.max(1, page - 1);
+//                 setPage(p);
+//                 fetchResults(p);
+//               }}
+//               className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 text-sm"
+//             >
+//               Previous
+//             </button>
+
+//             <div className="text-sm text-gray-700">Page {page} of {totalPages}</div>
+
+//             <button
+//               disabled={page >= totalPages}
+//               onClick={() => {
+//                 const p = Math.min(totalPages, page + 1);
+//                 setPage(p);
+//                 fetchResults(p);
+//               }}
+//               className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 text-sm"
+//             >
+//               Next
+//             </button>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+
+
+
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Search, Star, X } from "lucide-react";
+
+// Import the modals and their types from the shared component file
+import { MasterSkillModal, SubskillModal, MasterSkillMetrics, SubskillMetrics } from '../components/SkillModals';
+
+type User = any;
 
 interface SkillMatchingTabProps {
-  user: User;
+    user?: User;
 }
 
-interface SubSkillData {
-  name: string;
-  proficiency: number;
-  experience: number;
-  hasCertification?: boolean;
-  status?: string;
-  certificationFile?: File | string | null;
-  certificationCreationDate?: string | null;
-  certificationExpirationDate?: string | null;
-  employee_name?: string;
-  employee_id?: string;
-  skill_name?: string;
-  coverage?: number;
+interface SubSkillOption {
+    id: number;
+    name: string;
+    master_skill?: string;
+}
+
+interface SubSkillRequirement {
+    subskill_id: number;
+    min_proficiency?: number | null;
+    min_experience?: number | null;
+    max_experience?: number | null;
+    require_certification?: boolean | null;
+}
+
+interface SubskillData {
+    name: string;
+    proficiency?: number | null;
+    experience?: number | null;
+    hasCertification?: boolean;
+    status?: string;
+    certificationFile?: string | null;
+    certificationCreationDate?: string | null;
+    certificationExpirationDate?: string | null;
+    employee_name?: string;
+    employee_id?: string;
+    skill_name?: string;
+    coverage?: number;
+    score?: number;
+    subskill_id?: number;
 }
 
 interface SkillData {
-  skill_name: string;
-  matched_subskills: number;
-  total_subskills: number;
-  sub_skills: SubSkillData[];
+    skill_name: string;
+    matched_subskills: number;
+    total_subskills: number;
+    sub_skills: SubskillData[];
 }
 
 interface EmployeeData {
-  employee_id: string;
-  employee_name: string;
-  coverage: number;
-  skills: SkillData[];
+    employee_id: string;
+    employee_name: string;
+    score: number;
+    coverage: number;
+    skills: SkillData[];
 }
 
-interface SkillFilter {
-  skill?: string;
-  proficiency?: number;
-  min_experience?: number;
-  max_experience?: number;
-  hasCertification?: boolean;
-  status?: string;
-  sortExperience?: 'asc' | 'desc';
-  sortProficiency?: 'asc' | 'desc';
-  sortCoverage?: 'asc' | 'desc';
-  employee_name?: string;
-}
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-export default function SkillMatchingTab({ user }: SkillMatchingTabProps) {
-  const [filters, setFilters] = useState<SkillFilter>({});
-  const [appliedFilters, setAppliedFilters] = useState<SkillFilter>({}); // ✅ only applied when Search clicked
+export default function SkillMatchingTab(_: SkillMatchingTabProps) {
+    // data/state
+    const [allSubskills, setAllSubskills] = useState<SubSkillOption[]>([]);
+    const [searchInput, setSearchInput] = useState("");
+    const [suggestions, setSuggestions] = useState<SubSkillOption[]>([]);
+    const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+    const [selectedRequirements, setSelectedRequirements] = useState<
+        SubSkillRequirement[]
+    >([]);
+    const [unmatchedCandidates, setUnmatchedCandidates] = useState<
+        { phrase: string; skill?: string }[]
+    >([]);
 
-  const [mainFilteredData, setMainFilteredData] = useState<SubSkillData[]>([]);
-const [tableFilteredData, setTableFilteredData] = useState<SubSkillData[]>([]);
-const [statusFilter, setStatusFilter] = useState<string>("All");
-const [certificationFilter, setCertificationFilter] = useState<string>("All");
-  const [flattenedSubSkills, setFlattenedSubSkills] = useState<SubSkillData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(2); // show 2 employees per page
-  const [totalPages, setTotalPages] = useState(1); // backend total pages
- // ✅ add this
-  const [subskillPageSize] = useState(10);
-  const [totalSubSkillPages, setTotalSubSkillPages] = useState(1);
-  const [searchInput, setSearchInput] = useState(""); // for typing
-  const [searchTerm, setSearchTerm] = useState("");   // for applied search
-  const [selectedCertification, setSelectedCertification] = useState<string[]>([]);
-  const [selectedExperience, setSelectedExperience] = useState<string>("");
-  const [data, setData] = useState<any[]>([]);
-  const [tableFilters, setTableFilters] = useState<SkillFilter>({});
-  const [searchTrigger, setSearchTrigger] = useState(0);
+    const [jobTitle, setJobTitle] = useState("");
 
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(5); // employees per page
+    const [totalPages, setTotalPages] = useState(1);
 
+    const [loading, setLoading] = useState(false);
+    const [results, setResults] = useState<EmployeeData[]>([]);
 
+    // New: Modal State for SkillMatchingTab
+    const [masterSkillModalData, setMasterSkillModalData] = useState<MasterSkillMetrics | null>(null);
+    const [subskillModalData, setSubskillModalData] = useState<SubskillMetrics | null>(null);
+    const [modalLoading, setModalLoading] = useState(false);
 
-  const fetchSkills = async () => {
-  try {
-    setLoading(true);
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    // header filters (table-level)
+    const [headerCertFilter, setHeaderCertFilter] = useState<"" | "true" | "false">("");
+    const [headerStatusFilter, setHeaderStatusFilter] = useState<"" | string>("");
 
-    const params = new URLSearchParams();
-    if (appliedFilters.skill) params.append("skill", appliedFilters.skill);
-    if (appliedFilters.proficiency !== undefined) params.append("proficiency", String(appliedFilters.proficiency));
-    if (appliedFilters.min_experience !== undefined) params.append("min_experience", String(appliedFilters.min_experience));
-    if (appliedFilters.max_experience !== undefined) params.append("max_experience", String(appliedFilters.max_experience));
-    if (appliedFilters.hasCertification !== undefined) params.append("has_certification", String(appliedFilters.hasCertification));
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    params.append("page", String(page));
-    params.append("page_size", String(pageSize));
+    // fetch subskills list once
+    useEffect(() => {
+        const fetchSubskills = async () => {
+            try {
+                const res = await fetch(
+                    `${import.meta.env.VITE_BACKEND_URL}/skills/subskills`
+                );
+                if (!res.ok) throw new Error("Failed to load subskills");
+                const json = await res.json();
+                setAllSubskills(json || []);
+            } catch (err) {
+                console.error("Failed to load subskills", err);
+            }
+        };
+        fetchSubskills();
+    }, []);
 
-    const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching?${params.toString()}`;
-    const response = await fetch(url, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
+    // default search on mount (no requirements) — shows initial results
+    useEffect(() => {
+        const t = setTimeout(() => fetchResults(1), 120);
+        return () => clearTimeout(t);
+    }, []);
 
-    if (!response.ok) throw new Error("Failed to fetch skills");
-    const data = await response.json();
+    // suggestions (debounced) — match master_skill + subskill name
+    useEffect(() => {
+        if (!searchInput) {
+            setSuggestions([]);
+            setIsSuggestionsOpen(false);
+            return;
+        }
+        const t = setTimeout(() => {
+            const q = searchInput.trim().toLowerCase();
+            const filtered = allSubskills.filter((s) => {
+                const combined = `${(s.master_skill ?? "")} ${s.name}`.toLowerCase();
+                return combined.includes(q);
+            });
+            setSuggestions(filtered.slice(0, 7));
+            setIsSuggestionsOpen(true);
+        }, 120);
+        return () => clearTimeout(t);
+    }, [searchInput, allSubskills]);
 
-    setMainFilteredData(data.results);
-    setTotalPages(data.total_pages);
+    // click outside closes suggestions
+    useEffect(() => {
+        const onDoc = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsSuggestionsOpen(false);
+            }
+        };
+        document.addEventListener("click", onDoc);
+        return () => document.removeEventListener("click", onDoc);
+    }, []);
 
-    // flatten
-    const flatten = data.results.flatMap((emp: EmployeeData) =>
-      emp.skills.flatMap(skill =>
-        skill.sub_skills.map(sub => ({
-          ...sub,
-          employee_name: emp.employee_name,
-          employee_id: emp.employee_id,
-          skill_name: skill.skill_name,
-          coverage: emp.coverage,
-        }))
-      )
-    );
-    setFlattenedSubSkills(flatten);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
+    // add selected subskill
+    const addRequirement = (sub: SubSkillOption) => {
+        if (!selectedRequirements.some((r) => r.subskill_id === sub.id)) {
+            setSelectedRequirements((prev) => [
+                ...prev,
+                {
+                    subskill_id: Number(sub.id),
+                    min_proficiency: null,
+                    min_experience: null,
+                    max_experience: null,
+                    require_certification: null,
+                },
+            ]);
+        }
+        setSearchInput("");
+        setSuggestions([]);
+        setIsSuggestionsOpen(false);
+        inputRef.current?.focus();
+    };
 
+    const removeRequirement = (id: number) => {
+        setSelectedRequirements((reqs) => reqs.filter((r) => r.subskill_id !== id));
+    };
 
+    // update requirement field (keeps values compact)
+    const updateRequirement = (
+        id: number,
+        field: keyof SubSkillRequirement,
+        value: any
+    ) => {
+        setSelectedRequirements((reqs) =>
+            reqs.map((r) =>
+                r.subskill_id === id
+                    ? {
+                        ...r,
+                        [field]:
+                            value === "" || value === null || value === undefined
+                                ? null
+                                : field === "require_certification"
+                                    ? Boolean(value)
+                                    : Number(value),
+                    }
+                    : r
+            )
+        );
+    };
 
-// update input as user types
-const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  setSearchInput(e.target.value);
-};
+    const expOptions = [...Array(10)].map((_, i) => i + 1);
 
-// Search button applies filters
-const handleSearch = () => {
-  setAppliedFilters(filters);
-  setPage(1); // reset to first page
-  setSearchTrigger(prev => prev + 1); // Trigger the fetch
-};
+    const buildPayload = () => {
+        return {
+            requirements: selectedRequirements.map((r) => {
+                const out: any = { subskill_id: Number(r.subskill_id) };
+                if (r.min_proficiency != null) out.min_proficiency = Number(r.min_proficiency);
+                if (r.min_experience != null) out.min_experience = Number(r.min_experience) * 12;
+                if (r.max_experience != null) out.max_experience = Number(r.max_experience) * 12;
+                if (r.require_certification != null)
+                    out.require_certification = Boolean(r.require_certification);
+                return out;
+            }),
+        };
+    };
 
+    const fetchResults = async (pageToUse = page) => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const payload = buildPayload();
+            console.debug("POST payload:", payload);
 
+            const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching?page=${pageToUse}&page_size=${pageSize}`;
 
-// 🔑 only depends on appliedFilters
-// Use the searchTrigger state to force a fetch when the button is clicked.
-useEffect(() => {
-  fetchSkills();
-}, [page, pageSize, appliedFilters, searchTrigger]);
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify(payload),
+            });
 
-  // Local sorting & table header filters
-  const filteredSubSkills = useMemo(() => {
-  let arr = [...flattenedSubSkills];
+            if (!res.ok) {
+                const txt = await res.text();
+                console.error("Server responded", res.status, txt);
+                throw new Error(txt || "Server error");
+            }
 
-  if (tableFilters.employee_name) {
-    arr = arr.filter(s => s.employee_name?.toLowerCase().includes(tableFilters.employee_name!.toLowerCase()));
-  }
-  if (tableFilters.skill) {
-    arr = arr.filter(
-      s =>
-        s.skill_name?.toLowerCase().includes(tableFilters.skill!.toLowerCase()) ||
-        s.name?.toLowerCase().includes(tableFilters.skill!.toLowerCase())
-    );
-  }
-  if (tableFilters.hasCertification !== undefined) {
-    arr = arr.filter(s => s.hasCertification === tableFilters.hasCertification);
-  }
-  if (tableFilters.status) {
-    arr = arr.filter(s => s.status === tableFilters.status);
-  }
-  if (tableFilters.sortProficiency) {
-    arr.sort((a, b) =>
-      tableFilters.sortProficiency === 'asc' ? a.proficiency - b.proficiency : b.proficiency - a.proficiency
-    );
-  }
-  if (tableFilters.sortExperience) {
-    arr.sort((a, b) =>
-      tableFilters.sortExperience === 'asc' ? (a.experience ?? 0) - (b.experience ?? 0) : (b.experience ?? 0) - (a.experience ?? 0)
-    );
-  }
-  if (tableFilters.sortCoverage) {
-    arr.sort((a, b) =>
-      tableFilters.sortCoverage === 'asc' ? (a.coverage ?? 0) - (b.coverage ?? 0) : (b.coverage ?? 0) - (a.coverage ?? 0)
-    );
-  }
+            const json = await res.json();
+            setResults(json.results || []);
+            setTotalPages(json.total_pages || 1);
+            setPage(json.page || pageToUse);
+        } catch (err) {
+            console.error("Fetch error:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  return arr;
-}, [flattenedSubSkills, tableFilters]);
+    const handleMasterSkillView = async (skillName: string) => {
+        setModalLoading(true);
+        setMasterSkillModalData(null);
+        try {
+            const token = localStorage.getItem("token");
+            const url = `${BACKEND_URL}/dashboard/master-skill-by-name?skill_name=${encodeURIComponent(skillName)}`;
+            const res = await fetch(url, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error("Failed to fetch master skill data.");
+            const data = await res.json();
+            setMasterSkillModalData(data);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to load skill details.");
+        } finally {
+            setModalLoading(false);
+        }
+    };
 
+    const handleSubskillView = async (subskillId: number) => {
+        setModalLoading(true);
+        setSubskillModalData(null);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${BACKEND_URL}/dashboard/sub-skill/${subskillId}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error("Failed to fetch sub-skill data.");
+            const data = await res.json();
+            setSubskillModalData(data);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to load sub-skill details.");
+        } finally {
+            setModalLoading(false);
+        }
+    };
 
-const groupedByEmployee = useMemo(() => {
-  const empMap: Record<string, EmployeeData> = {};
-  filteredSubSkills.forEach(sub => {
-    if (!empMap[sub.employee_id!]) {
-      empMap[sub.employee_id!] = {
-        employee_id: sub.employee_id!,
-        employee_name: sub.employee_name!,
-        coverage: sub.coverage ?? 0,
-        skills: []
-      };
-    }
+    const handleSearch = () => {
+        setPage(1);
+        fetchResults(1);
+    };
 
-    let skillObj = empMap[sub.employee_id!].skills.find(
-      s => s.skill_name === sub.skill_name
-    );
+    const handleExport = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const payload = buildPayload();
+            const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching/export`;
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const href = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = href;
+            a.download = "employee_skills.xlsx";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(href);
+        } catch (err) {
+            console.error("Export error:", err);
+        }
+    };
 
-    if (!skillObj) {
-      skillObj = { 
-        skill_name: sub.skill_name!, 
-        matched_subskills: 0, 
-        total_subskills: 0, 
-        sub_skills: [] 
-      };
-      empMap[sub.employee_id!].skills.push(skillObj);
-    }
+    const handleFileUpload = async (file?: File) => {
+        if (!file) return;
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const fd = new FormData();
+            fd.append("file", file);
 
-    skillObj.sub_skills.push(sub);
-    skillObj.total_subskills++;
-    if (sub.proficiency > 0) skillObj.matched_subskills++;
-  });
+            const url = `${import.meta.env.VITE_BACKEND_URL}/skills/upload_jd`;
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: fd,
+            });
 
-  return Object.values(empMap);
-}, [filteredSubSkills]);
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(`Upload failed: ${res.status} ${txt}`);
+            }
 
-  const renderStars = (proficiency: number | null) => {
-    const p = proficiency ?? 0;
-    return (
-      <div className="flex space-x-1">
-        {[...Array(5)].map((_, i) => (
-          <Star
-            key={i}
-            className={`w-4 h-4 ${i < p ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
-          />
-        ))}
-      </div>
-    );
-  };
+            const json = await res.json();
+            setJobTitle(json.job_title);
+            const structured = Array.isArray(json.structured_data) ? json.structured_data : [];
+            const unmatched = Array.isArray(json.unmatched_skills) ? json.unmatched_skills : [];
 
-  useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const params = new URLSearchParams();
-      params.append("page", String(page));
-      params.append("page_size", String(pageSize));
+            const newSelected: SubSkillRequirement[] = [];
+            const newUnmatched: { phrase: string; skill?: string }[] = [];
 
-      if (searchTerm) {
-        params.append("search", searchTerm);
-      }
-      if (selectedExperience) {
-        params.append("experience", String(selectedExperience));
-      }
-      if (selectedCertification) {
-        params.append("certification", String(selectedCertification));
-      }
+            const findSubskillCandidate = (subSkillName: string, skillName?: string) => {
+                if (!subSkillName) return { found: undefined, ambiguous: false, candidates: [] };
+                const sLower = subSkillName.trim().toLowerCase();
+                const skillLower = (skillName ?? "").trim().toLowerCase();
+                const exactMatches = allSubskills.filter(s => s.name.trim().toLowerCase() === sLower);
+                if (exactMatches.length === 1) return { found: exactMatches[0], ambiguous: false, candidates: exactMatches };
+                if (exactMatches.length > 1 && skillName) {
+                    const masterMatches = exactMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase() === skillLower);
+                    if (masterMatches.length === 1) return { found: masterMatches[0], ambiguous: false, candidates: masterMatches };
+                    if (masterMatches.length > 1) return { found: masterMatches[0], ambiguous: true, candidates: masterMatches };
+                    const masterContains = exactMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase().includes(skillLower) || skillLower.includes((s.master_skill ?? "").trim().toLowerCase()));
+                    if (masterContains.length === 1) return { found: masterContains[0], ambiguous: false, candidates: masterContains };
+                    if (masterContains.length > 1) return { found: masterContains[0], ambiguous: true, candidates: masterContains };
+                }
+                const substrMatches = allSubskills.filter(s => {
+                    const combined = `${(s.master_skill ?? "")} ${(s.name ?? "")}`.trim().toLowerCase();
+                    return s.name.trim().toLowerCase().includes(sLower) || sLower.includes(s.name.trim().toLowerCase()) || combined.includes(sLower);
+                });
+                if (substrMatches.length === 1) return { found: substrMatches[0], ambiguous: false, candidates: substrMatches };
+                if (substrMatches.length > 1 && skillName) {
+                    const preferByMaster = substrMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase() === skillLower);
+                    if (preferByMaster.length === 1) return { found: preferByMaster[0], ambiguous: false, candidates: preferByMaster };
+                    if (preferByMaster.length > 1) return { found: preferByMaster[0], ambiguous: true, candidates: preferByMaster };
+                    const preferContains = substrMatches.filter(s => (s.master_skill ?? "").trim().toLowerCase().includes(skillLower) || skillLower.includes((s.master_skill ?? "").trim().toLowerCase()));
+                    if (preferContains.length === 1) return { found: preferContains[0], ambiguous: false, candidates: preferContains };
+                    if (preferContains.length > 1) return { found: preferContains[0], ambiguous: true, candidates: preferContains };
+                }
+                if (exactMatches.length > 0) return { found: exactMatches[0], ambiguous: exactMatches.length > 1, candidates: exactMatches };
+                if (substrMatches.length > 0) return { found: substrMatches[0], ambiguous: substrMatches.length > 1, candidates: substrMatches };
+                return { found: undefined, ambiguous: false, candidates: [] };
+            };
 
-      const res = await fetch(`/api/skills?${params.toString()}`);
-      const json = await res.json();
-      setData(json);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+            for (const item of structured) {
+                const skillFromLLM = (item.skill ?? "").toString();
+                const subFromLLM = (item.sub_skill ?? "").toString();
+                const { found, ambiguous, candidates } = findSubskillCandidate(subFromLLM, skillFromLLM);
+                if (found) {
+                    const parseExp = (v: any) => {
+                        if (v == null) return null;
+                        if (typeof v === "string" && v.trim().endsWith("+")) {
+                            const num = parseFloat(v.replace("+", "").trim());
+                            return Number.isFinite(num) ? 11 : null;
+                        }
+                        const n = Number(v);
+                        return Number.isFinite(n) ? n : null;
+                    };
+                    newSelected.push({
+                        subskill_id: Number(found.id),
+                        min_proficiency: item.min_proficiency == null ? null : Number(item.min_proficiency),
+                        min_experience: parseExp(item.min_experience),
+                        max_experience: parseExp(item.max_experience),
+                        require_certification: item.required_certification == null ? null : Boolean(item.required_certification),
+                    });
+                    if (ambiguous) {
+                        newUnmatched.push({
+                            phrase: subFromLLM || skillFromLLM || "Unknown",
+                            skill: skillFromLLM || undefined,
+                            ambiguous: true,
+                            candidates: candidates.map(c => ({ id: c.id, name: c.name, master_skill: c.master_skill }))
+                        });
+                    }
+                } else {
+                    newUnmatched.push({
+                        phrase: subFromLLM || skillFromLLM || "Unknown",
+                        skill: skillFromLLM || undefined
+                    });
+                }
+            }
+            for (const u of unmatched) {
+                if (typeof u === "string") {
+                    newUnmatched.push({ phrase: u });
+                } else if (u && typeof u === "object") {
+                    newUnmatched.push({ phrase: (u.sub_skill ?? u.phrase ?? ""), skill: u.skill ?? undefined });
+                }
+            }
+            setSelectedRequirements(() => [...newSelected]);
+            setUnmatchedCandidates(() => {
+                const map = new Map<string, { id?: number; phrase: string; skill?: string }>();
+                newUnmatched.forEach(u => {
+                    const key = `${u.skill ?? ""}||${u.phrase}`.toLowerCase();
+                    if (!map.has(key)) map.set(key, u);
+                });
+                return Array.from(map.values());
+            });
+            setIsSuggestionsOpen(false);
+        } catch (err) {
+            console.error("File parsing/upload error:", err);
+            alert(`Upload failed: ${String(err)}`);
+        } finally {
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            setLoading(false);
+        }
+    };
 
-  fetchData();
-}, [page, pageSize, searchTerm, selectedExperience, selectedCertification]);
-  return (
-    <div>
-      {/* Main Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-4">
-        <div className="flex flex-wrap items-end gap-4">
-          {/* Skill/Sub-skill */}
-          <div className="flex-1 min-w-[150px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Skill/Sub-skill</label>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-2 top-2.5 text-gray-400" />
-              <input
-                type="text"
-                value={filters.skill || ''}
-                onChange={(e) => setFilters({ ...filters, skill: e.target.value })}
-                placeholder="Search skills..."
-                className="w-full pl-8 pr-2 py-1 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-          </div>
+    const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        handleFileUpload(f);
+    };
 
-          {/* Min Proficiency */}
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Min Proficiency</label>
-            <select
-              value={filters.proficiency || ''}
-              onChange={(e) => setFilters({ ...filters, proficiency: e.target.value ? parseInt(e.target.value) : undefined })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-lg text-sm"
-            >
-              <option value="">All</option>
-              {[1, 2, 3, 4, 5].map(i => <option key={i} value={i}>{i}★+</option>)}
-            </select>
-          </div>
+    const flattenedSubSkills: SubskillData[] = useMemo(() => {
+        return results.flatMap((emp) =>
+            emp.skills.flatMap((skill) =>
+                skill.sub_skills.map((sub) => ({
+                    ...sub,
+                    employee_name: emp.employee_name,
+                    employee_id: emp.employee_id,
+                    skill_name: skill.skill_name,
+                    coverage: emp.coverage,
+                    score: emp.score,
+                    subskill_id: sub.subskill_id,
+                }))
+            )
+        );
+    }, [results]);
 
-          {/* Min & Max Exp */}
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Min Exp</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={filters.min_experience ?? ''}
-              onChange={(e) => setFilters({ ...filters, min_experience: e.target.value ? parseFloat(e.target.value) : undefined })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max Exp</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={filters.max_experience ?? ''}
-              onChange={(e) => setFilters({ ...filters, max_experience: e.target.value ? parseFloat(e.target.value) : undefined })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
+    const filteredSubSkills = useMemo(() => {
+        let arr = [...flattenedSubSkills];
+        if (headerCertFilter !== "") {
+            const want = headerCertFilter === "true";
+            arr = arr.filter(s => Boolean(s.hasCertification) === want);
+        }
+        if (headerStatusFilter) {
+            arr = arr.filter(s => (s.status || "").toLowerCase() === headerStatusFilter.toLowerCase());
+        }
+        return arr;
+    }, [flattenedSubSkills, headerCertFilter, headerStatusFilter]);
 
-          {/* Certification */}
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Certifications</label>
-            <select
-              value={filters.hasCertification === undefined ? '' : filters.hasCertification.toString()}
-              onChange={(e) => setFilters({ ...filters, hasCertification: e.target.value === '' ? undefined : e.target.value === 'true' })}
-              className="w-full px-2 py-1 border border-gray-300 rounded-lg text-sm"
-            >
-              <option value="">All</option>
-              <option value="true">With Cert</option>
-              <option value="false">Without Cert</option>
-            </select>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-2 mt-1">
-            <button
-  onClick={handleSearch}
-  className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm"
->
-  Search
-</button>
-
-            <button onClick={() => { setFilters({}); setFlattenedSubSkills([]); setMainFilteredData([]); setPage(1); }} className="px-3 py-1 bg-gray-200 rounded-lg text-sm">Clear</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="flex justify-between items-center text-lg font-medium text-gray-900">
-            Matching Sub-skills ({filteredSubSkills.length} found)
-           
-            <button
-    onClick={async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const params = new URLSearchParams();
-        if (appliedFilters.skill) params.append("skill", appliedFilters.skill);
-        if (appliedFilters.proficiency !== undefined) params.append("proficiency", String(appliedFilters.proficiency));
-        if (appliedFilters.min_experience !== undefined) params.append("min_experience", String(appliedFilters.min_experience));
-        if (appliedFilters.max_experience !== undefined) params.append("max_experience", String(appliedFilters.max_experience));
-        if (appliedFilters.hasCertification !== undefined) params.append("has_certification", String(appliedFilters.hasCertification));
-
-        const url = `${import.meta.env.VITE_BACKEND_URL}/skills/matching/export?${params.toString()}`;
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
+    const groupedByEmployee = useMemo(() => {
+        const map: Record<string, EmployeeData> = {};
+        filteredSubSkills.forEach((sub) => {
+            const empId = sub.employee_id ?? "unknown";
+            if (!map[empId]) {
+                map[empId] = {
+                    employee_id: sub.employee_id || empId,
+                    employee_name: sub.employee_name || "Unknown",
+                    score: sub.score ?? 0,
+                    coverage: sub.coverage ?? 0,
+                    skills: [],
+                };
+            }
+            let skillObj = map[empId].skills.find((s) => s.skill_name === sub.skill_name);
+            if (!skillObj) {
+                skillObj = {
+                    skill_name: sub.skill_name || "Unknown",
+                    matched_subskills: 0,
+                    total_subskills: 0,
+                    sub_skills: [],
+                };
+                map[empId].skills.push(skillObj);
+            }
+            skillObj.sub_skills.push(sub);
+            skillObj.total_subskills++;
+            if ((sub.proficiency ?? 0) > 0) skillObj.matched_subskills++;
         });
+        return Object.values(map);
+    }, [filteredSubSkills]);
 
-        if (!response.ok) throw new Error("Failed to export");
+    const getEmployeeRowSpan = (emp: EmployeeData) =>
+        emp.skills.reduce((acc, s) => acc + Math.max(1, s.sub_skills.length), 0);
 
-        const blob = await response.blob();
-        const urlObject = window.URL.createObjectURL(blob);
+    const renderStars = (proficiency?: number | null) => {
+        const p = proficiency ?? 0;
+        return (
+            <div className="flex items-center space-x-1">
+                {[0, 1, 2, 3, 4].map((i) => (
+                    <Star
+                        key={i}
+                        className={`w-3 h-3 ${i < p ? "text-yellow-400" : "text-gray-300"}`}
+                    />
+                ))}
+                <span className="text-xs text-gray-600 ml-1">({p}/5)</span>
+            </div>
+        );
+    };
 
-        const link = document.createElement("a");
-        link.href = urlObject;
-        link.download = "employee_skills.xlsx";
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(urlObject);
-      } catch (err) {
-        console.error(err);
-      }
-    }}
-    className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-  >
-    Export to Excel
-  </button>
-   </h3>
+    return (
+        <div className="p-4">
+            {/* Compact add-subskill UI */}
+            <div className="bg-white p-2 rounded shadow-sm mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-1" ref={containerRef}>
+                        <div className="flex items-center gap-2">
+                            <Search className="absolute left-2 top-2 text-gray-400 w-4 h-4" />
+                            <input
+                                ref={inputRef}
+                                className="w-full pl-8 pr-2 py-1 text-sm border rounded"
+                                placeholder="Search skill/subskills..."
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                            />
+                            <button
+                                className="text-sm px-2 py-0.5 bg-gray-100 rounded"
+                                onClick={() => {
+                                    setSearchInput("");
+                                    setIsSuggestionsOpen(false);
+                                }}
+                                title="Clear"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                        {isSuggestionsOpen && suggestions.length > 0 && (
+                            <ul className="absolute left-0 right-0 z-50 bg-white border rounded mt-1 max-h-36 overflow-auto shadow-sm text-sm">
+                                {suggestions.map((s) => (
+                                    <li
+                                        key={s.id}
+                                        onClick={() => addRequirement(s)}
+                                        className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                                    >
+                                        <span className="font-medium">{s.master_skill ?? "—"}</span>
+                                        <span className="text-gray-600"> — {s.name}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleSearch}
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+                        >
+                            {loading ? "Searching..." : "Search"}
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pdf,.docx,.txt"
+                                onChange={onFileChange}
+                                className="text-xs"
+                                id="jd-upload"
+                                style={{ display: "none" }}
+                            />
+                            <label htmlFor="jd-upload" className="px-3 py-1 bg-indigo-600 text-white rounded text-sm cursor-pointer">
+                                Upload JD
+                            </label>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setSelectedRequirements([]);
+                                setJobTitle("");
+                                setResults([]);
+                                setPage(1);
+                                setUnmatchedCandidates([]);
+                            }}
+                            className="px-3 py-1 bg-gray-100 rounded text-sm"
+                        >
+                            Clear All Filters
+                        </button>
+                        <button
+                            onClick={handleExport}
+                            className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+                        >
+                            Export
+                        </button>
+                    </div>
+                </div>
+  
+                <div className="mt-2 space-y-2">
+                    <div
+                      className="text-2xl md:text-xl font-bold text-gray-900 leading-tight"
+                      aria-label={`Job title: ${jobTitle}`}
+                    >
+                    {jobTitle}
+                    </div>
+                    {unmatchedCandidates.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-1">
+                            {unmatchedCandidates.map((u, idx) => (
+                                <div key={idx} className="text-xs px-2 py-0.5 bg-red-100 text-red-800 rounded">
+                                    Not found: <strong>{u.phrase}</strong>{u.skill ? ` (skill: ${u.skill})` : ""}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {selectedRequirements.map((req) => {
+                        const sub = allSubskills.find((s) => s.id === req.subskill_id);
+                        const displayLabel = sub ? `${sub.master_skill ?? "—"} - ${sub.name}` : `Subskill ${req.subskill_id}`;
+                        return (
+                            <div
+                                key={req.subskill_id}
+                                className="w-full bg-gray-50 border rounded p-1 grid grid-cols-12 gap-2 items-center text-sm"
+                            >
+                                <div className="col-span-3 font-medium text-sm truncate">{displayLabel}</div>
+                                <div className="col-span-2 flex items-center gap-2">
+                                    <label className="text-xs text-gray-600 w-14">Min Prof</label>
+                                    <select
+                                        className="w-full px-2 py-0.5 text-sm border rounded"
+                                        value={req.min_proficiency == null ? "" : String(req.min_proficiency)}
+                                        onChange={(e) => {
+                                            const v = e.target.value === "" ? null : Number(e.target.value);
+                                            updateRequirement(req.subskill_id, "min_proficiency", v);
+                                        }}
+                                    >
+                                        <option value="">Any</option>
+                                        {[1, 2, 3, 4, 5].map((o) => (
+                                            <option key={o} value={o}>{o}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-2 flex items-center gap-2">
+                                    <label className="text-xs text-gray-600 w-14">Min Exp</label>
+                                    <select
+                                        className="w-full px-2 py-0.5 text-sm border rounded"
+                                        value={req.min_experience == null ? "" : String(req.min_experience === 11 ? 11 : req.min_experience)}
+                                        onChange={(e) => {
+                                            const v = e.target.value === "" ? null : (e.target.value === "11" ? 11 : Number(e.target.value));
+                                            updateRequirement(req.subskill_id, "min_experience", v);
+                                        }}
+                                    >
+                                        <option value="">Any</option>
+                                        {expOptions.map((o) => (
+                                            <option key={o} value={o}>{o}</option>
+                                        ))}
+                                        <option value="11">10+</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2 flex items-center gap-2">
+                                    <label className="text-xs text-gray-600 w-14">Max Exp</label>
+                                    <select
+                                        className="w-full px-2 py-0.5 text-sm border rounded"
+                                        value={req.max_experience == null ? "" : String(req.max_experience === 11 ? 11 : req.max_experience)}
+                                        onChange={(e) => {
+                                            const v = e.target.value === "" ? null : (e.target.value === "11" ? 11 : Number(e.target.value));
+                                            updateRequirement(req.subskill_id, "max_experience", v);
+                                        }}
+                                    >
+                                        <option value="">Any</option>
+                                        {expOptions.map((o) => (
+                                            <option key={o} value={o}>{o}</option>
+                                        ))}
+                                        <option value="11">10+</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-1 flex items-center gap-1">
+                                    <label className="text-xs text-gray-600 w-20">Certification</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(req.require_certification)}
+                                        onChange={(e) =>
+                                            updateRequirement(req.subskill_id, "require_certification", e.target.checked)
+                                        }
+                                    />
+                                </div>
+                                <div className="col-span-2 flex items-center justify-end gap-2">
+                                    <button
+                                        onClick={() => sub && sub.id && handleSubskillView(sub.id)}
+                                        title="View Charts"
+                                        className="px-2 py-0.5 text-xs text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50"
+                                    >
+                                        Charts           
+                                    </button>
+                                    <button
+                                        onClick={() => removeRequirement(req.subskill_id)}
+                                        title="Remove"
+                                        className="text-red-600 hover:bg-red-100 rounded-full p-1"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+            {/* Results table (grouped by employee -> skill -> subskills) */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-auto">
+                <div className="px-4 py-3 border-b">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-medium">Matching Sub-skills</h3>
+                        <div className="text-xs text-gray-600">Page {page} of {totalPages}</div>
+                    </div>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 text-xs">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                <th className="px-3 py-2 text-left font-semibold">Employee Name</th>
+                                <th className="px-3 py-2 text-left font-semibold">Employee Id</th>
+                                <th className="px-3 py-2 text-left font-semibold">Skill</th>
+                                <th className="px-3 py-2 text-left font-semibold">Sub-skill</th>
+                                <th className="px-3 py-2 text-left font-semibold">Proficiency</th>
+                                <th className="px-3 py-2 text-left font-semibold">Experience</th>
+                                <th className="px-3 py-2 text-left font-semibold ">
+                                    <div className="flex items-center gap-2">
+                                        <span>Certification</span>
+                                        <select
+                                            className="mt-1 w-5 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                                            value={headerCertFilter}
+                                            onChange={(e) => setHeaderCertFilter(e.target.value as "" | "true" | "false")}
+                                        >
+                                            <option value="">All</option>
+                                            <option value="true">Required</option>
+                                            <option value="false">Not Required</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th className="px-3 py-2 text-left font-semibold">
+                                    <div className="flex items-center gap-2">
+                                        <span>Status</span>
+                                        <select
+                                            className="mt-1 w-5 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                                            value={headerStatusFilter}
+                                            onChange={(e) => setHeaderStatusFilter(e.target.value)}
+                                        >
+                                            <option value="">All</option>
+                                            <option value="APPROVED">APPROVED</option>
+                                            <option value="PENDING">PENDING</option>
+                                            <option value="REJECTED">REJECTED</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th className="px-3 py-2 text-left font-semibold">Score / Coverage</th>
+                               
+                            </tr>
+                        </thead>
+
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {groupedByEmployee.map((emp) =>
+                                emp.skills.flatMap((skill, skillIndex) => {
+                                    const subSkills = skill.sub_skills.length
+                                        ? skill.sub_skills
+                                        : [
+                                            {
+                                                name: "-",
+                                                proficiency: 0,
+                                                experience: 0,
+                                                hasCertification: false,
+                                                status: "-",
+                                            },
+                                        ];
+
+                                    return subSkills.map((sub, idx) => {
+                                        const showEmployeeCell = idx === 0 && skillIndex === 0;
+                                        const employeeRowSpan = getEmployeeRowSpan(emp);
+                                        return (
+                                            <tr
+                                                key={`${emp.employee_id}-${skill.skill_name}-${idx}`}
+                                                className="text-xs even:bg-white odd:bg-white"
+                                            >
+                                                {showEmployeeCell && (
+                                                    <>
+                                                        <td
+                                                            rowSpan={employeeRowSpan}
+                                                            className="px-3 py-1 text-xs font-medium align-top"
+                                                        >
+                                                            {emp.employee_name}
+                                                        </td>
+                                                        <td
+                                                            rowSpan={employeeRowSpan}
+                                                            className="px-3 py-1 text-xs align-top"
+                                                        >
+                                                            {emp.employee_id}
+                                                        </td>
+                                                    </>
+                                                )}
+
+                                                {idx === 0 && (
+                                                    <td
+                                                        rowSpan={subSkills.length}
+                                                        className="px-3 py-1 text-xs font-medium align-top"
+                                                    >
+                                                        <div className="flex flex-col items-start gap-1">
+                                                            <div>{skill.skill_name}</div>
+                                                            {/* <button
+                                                                onClick={() => handleMasterSkillView(skill.skill_name)}
+                                                                className="px-2 py-0.5 text-xs text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50"
+                                                            >
+                                                                View Charts
+                                                            </button> */}
+                                                        </div>
+                                                    </td>
+                                                )}
+
+                                                <td className="px-3 py-1 text-xs align-top">{sub.name}</td>
+                                                <td className="px-3 py-1 text-xs align-top">
+                                                    {renderStars(sub.proficiency)}
+                                                </td>
+                                                <td className="px-3 py-1 text-xs align-top">
+                                                    {sub.experience ? `${Math.floor(sub.experience / 12)}Y, ${sub.experience % 12}m` : "-"}
+                                                </td>
+                                                <td className="px-3 py-1 text-xs align-top">
+                                                    {sub.hasCertification ? "Certified" : "Not Certified"}
+                                                </td>
+                                                <td className="px-3 py-1 text-xs align-top">
+                                                    {sub.status ?? "-"}
+                                                </td>
+                                                {showEmployeeCell && (
+                                                    <td
+                                                        rowSpan={employeeRowSpan}
+                                                        className={`px-3 py-1 text-xs font-semibold text-center align-top`}
+                                                    >
+                                                        <div className="text-sm font-medium">{emp.score ?? "-"}</div>
+                                                        <div className="text-xs text-gray-600">{emp.coverage ?? "-"}%</div>
+                                                    </td>
+                                                )}
+                                                {/* New: Action button for each sub-skill */}
+                                              
+                                            </tr>
+                                        );
+                                    });
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                {/* pagination controls centered */}
+                <div className="px-4 py-3 border-t bg-gray-50">
+                    <div className="flex justify-center items-center gap-3">
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => {
+                                const p = Math.max(1, page - 1);
+                                setPage(p);
+                                fetchResults(p);
+                            }}
+                            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 text-sm"
+                        >
+                            Previous
+                        </button>
+                        <div className="text-sm text-gray-700">Page {page} of {totalPages}</div>
+                        <button
+                            disabled={page >= totalPages}
+                            onClick={() => {
+                                const p = Math.min(totalPages, page + 1);
+                                setPage(p);
+                                fetchResults(p);
+                            }}
+                            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 text-sm"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {/* Loading overlay for modals */}
+            {modalLoading && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-[100]">
+                    <p className="text-white text-lg">Loading charts...</p>
+                </div>
+            )}
+            {/* Modals are rendered here, they are imported from SharedModals.tsx */}
+            {masterSkillModalData && (
+                <MasterSkillModal
+                    data={masterSkillModalData}
+                    onClose={() => setMasterSkillModalData(null)}
+                />
+            )}
+            {subskillModalData && (
+                <SubskillModal
+                    data={subskillModalData}
+                    onClose={() => setSubskillModalData(null)}
+                />
+            )}
         </div>
-          
-            {/* ✅ Export Button */}
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-           <thead className="bg-gray-100">
-  <tr>
-    <th className="px-4 py-2 text-left font-semibold">Employee Name</th>
-    <th className="px-4 py-2 text-left font-semibold">Employee Id</th>
-    <th className="px-4 py-2 text-left font-semibold">Skill</th>
-    <th className="px-4 py-2 text-left font-semibold">Sub-skill</th>
-    <th className="px-4 py-2 text-left font-semibold">
-      Proficiency
-      <select
-        className="mt-1 w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
-        value={tableFilters.sortProficiency || ''}
-        onChange={(e) =>
-          setTableFilters({
-            ...tableFilters,
-            sortProficiency: e.target.value
-              ? (e.target.value as 'asc' | 'desc')
-              : undefined,
-          })
-        }
-      >
-        <option value="">None</option>
-        <option value="asc">Asc</option>
-        <option value="desc">Desc</option>
-      </select>
-    </th>
-    <th className="px-4 py-2 text-left font-semibold">
-      Experience
-      <select
-        className="mt-1 w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
-        value={tableFilters.sortExperience || ''}
-        onChange={(e) =>
-          setTableFilters({
-            ...tableFilters,
-            sortExperience: e.target.value
-              ? (e.target.value as 'asc' | 'desc')
-              : undefined,
-          })
-        }
-      >
-        <option value="">None</option>
-        <option value="asc">Asc</option>
-        <option value="desc">Desc</option>
-      </select>
-    </th>
-    <th className="px-4 py-2 text-left font-semibold">
-      Certification
-      <select
-        className="mt-1 w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
-        value={
-          tableFilters.hasCertification === undefined
-            ? ''
-            : tableFilters.hasCertification.toString()
-        }
-        onChange={(e) =>
-          setTableFilters({
-            ...tableFilters,
-            hasCertification:
-              e.target.value === ''
-                ? undefined
-                : e.target.value === 'true',
-          })
-        }
-      >
-        <option value="">All</option>
-        <option value="true">With Cert</option>
-        <option value="false">Without Cert</option>
-      </select>
-    </th>
-    <th className="px-4 py-2 text-left font-semibold">
-      Status
-      <select
-        className="mt-1 w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
-        value={tableFilters.status || ''}
-        onChange={(e) =>
-          setTableFilters({
-            ...tableFilters,
-            status: e.target.value || undefined,
-          })
-        }
-      >
-        <option value="">All</option>
-        <option value="APPROVED">APPROVED</option>
-        <option value="PENDING">PENDING</option>
-      </select>
-    </th>
-    <th className="px-4 py-2 text-left font-semibold">
-      Coverage
-      <select
-        className="mt-1 w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
-        value={tableFilters.sortCoverage || ''}
-        onChange={(e) =>
-          setTableFilters({
-            ...tableFilters,
-            sortCoverage: e.target.value
-              ? (e.target.value as 'asc' | 'desc')
-              : undefined,
-          })
-        }
-      >
-        <option value="">None</option>
-        <option value="asc">Asc</option>
-        <option value="desc">Desc</option>
-      </select>
-    </th>
-  </tr>
-</thead>
-
-
-
-
-            <tbody className="bg-white divide-y divide-gray-200 text-xs">
-  {groupedByEmployee.map((emp) =>
-    emp.skills.flatMap((skill, skillIndex) => {
-      const subSkills = skill.sub_skills.length
-        ? skill.sub_skills
-        : [{ name: "-", proficiency: 0, experience: 0, hasCertification: false, status: "-" }];
-
-      return subSkills.map((sub, idx) => (
-        <tr key={`${emp.employee_id}-${skill.skill_name}-${idx}`} className="text-xs">
-          {/* Employee info only once per employee */}
-          {idx === 0 && skillIndex === 0 && (
-            <>
-              <td rowSpan={emp.skills.reduce((acc, s) => acc + (s.sub_skills.length || 1), 0)} className="px-2 py-1 text-xs font-medium border">
-                {emp.employee_name}
-              </td>
-              <td rowSpan={emp.skills.reduce((acc, s) => acc + (s.sub_skills.length || 1), 0)} className="px-2 py-1 text-xs border">
-                {emp.employee_id}
-              </td>
-            </>
-          )}
-
-          {/* Skill column only once per skill */}
-          {idx === 0 && (
-            <td rowSpan={subSkills.length} className="px-2 py-1 text-xs font-medium border">
-              {skill.skill_name}
-            </td>
-          )}
-
-          <td className="px-2 py-1 text-xs border">{sub.name}</td>
-          <td className="px-2 py-1 text-xs flex items-center space-x-1 border">
-            {renderStars(sub.proficiency)}
-            <span>({sub.proficiency ?? '-'}/5)</span>
-          </td>
-          <td className="px-2 py-1 text-xs border">{sub.experience ?? '-'} yrs</td>
-          <td className="px-2 py-1 text-xs border">{sub.hasCertification ? 'Certified' : 'Not Certified'}</td>
-          <td className="px-2 py-1 text-xs border">{sub.status || '-'}</td>
-
-          {/* Coverage column only once per employee */}
-          {idx === 0 && skillIndex === 0 && (
-  <td
-    rowSpan={emp.skills.reduce((acc, s) => acc + (s.sub_skills.length || 1), 0)}
-    className={`px-2 py-1 text-xs border font-semibold text-center
-      ${
-        emp.coverage >= 80
-          ? "bg-green-100 text-green-700"
-          : emp.coverage >= 50
-          ? "bg-yellow-100 text-yellow-700"
-          : "bg-red-100 text-red-700"
-      }`}
-  >
-    {emp.coverage !== undefined ? `${emp.coverage}%` : "-"}
-  </td>
-)}
-
-        </tr>
-      ));
-    })
-  )}
-</tbody>
-
-
-
-
-
-
-          </table>
-        </div>
-
-       <div className="flex justify-between items-center px-5 py-3 border-t border-gray-200 bg-gray-50">
-  <button
-    disabled={page === 1}
-    onClick={() => setPage(p => Math.max(1, p - 1))}
-    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-  >
-    Previous
-  </button>
-  <span className="text-sm text-gray-600">
-    Page {page} of {totalPages}
-  </span>
-  <button
-    disabled={page === totalPages}
-    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-    className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-  >
-    Next
-  </button>
-</div>
-
-      </div>
-    </div>
-  );
+    );
 }

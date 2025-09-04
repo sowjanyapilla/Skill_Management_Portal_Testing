@@ -5,6 +5,8 @@ import SkillMatchingTab from './SkillMatchingTab';
 import ApprovalsTab from './ApprovalsTab';
 import EmployeeManagement from './EmployeeManagement';
 import { User as UserType } from '../types';
+import SkillManagement from './SkillManagement';
+import SkillDashboard from './SkillDashboard';
 
 interface DashboardProps {
   user: UserType;
@@ -12,7 +14,7 @@ interface DashboardProps {
 }
 
 // Add 'employee-management' to TabType
-type TabType = 'my-skills' | 'skill-matching' | 'approvals' | 'employee-management';
+type TabType = 'my-skills' | 'skill-matching' | 'approvals' | 'employee-management' | 'skill-management' | 'skill-dashboard';
 
 export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('my-skills');
@@ -26,6 +28,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           { id: 'skill-matching', label: 'Skill Matching', component: SkillMatchingTab },
           { id: 'approvals', label: 'Approvals', component: ApprovalsTab },
           { id: 'employee-management', label: 'Employee Management', component: EmployeeManagement },
+           { id: 'skill-management', label: 'Skill Management', component: SkillManagement },
+           { id: 'skill-dashboard', label: 'Skill Dashboard', component: SkillDashboard }
         ]
       : []),
   ];

@@ -23,9 +23,10 @@
 
 
 
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, DateTime, func
 from sqlalchemy.orm import relationship
 from database import Base
+
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -54,3 +55,20 @@ class Employee(Base):
     skill_histories = relationship("EmployeeSkillHistory", back_populates="employee",
                                    cascade="all, delete-orphan",
                                    foreign_keys="EmployeeSkillHistory.employee_id")
+    resumes = relationship("EmployeeResume", back_populates="employee", cascade="all, delete-orphan")
+    
+
+
+class EmployeeResume(Base):
+    __tablename__ = "employee_resumes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    resume_url = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(String(100))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(String(100))
+
+    # Optional: Relation to Employee
+    employee = relationship("Employee", back_populates="resumes")

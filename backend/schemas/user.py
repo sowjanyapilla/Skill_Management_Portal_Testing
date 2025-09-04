@@ -14,6 +14,9 @@ class EmployeeBase(BaseModel):
 
 # -------------------- Create --------------------
 class EmployeeCreate(EmployeeBase):
+    is_approver: Optional[bool]
+    is_active: Optional[bool] = True
+    is_available:Optional[bool]
     designation: Optional[str] = None
     capability: Optional[str] = None
     pass
@@ -32,6 +35,14 @@ class EmployeeResponse(EmployeeBase):
     is_approver: bool
     is_active: bool
     is_available: bool
+
+    class Config:
+        from_attributes = True
+
+
+class EmployeeMinimalResponse(EmployeeBase):
+    id: int
+    pass 
 
     class Config:
         from_attributes = True

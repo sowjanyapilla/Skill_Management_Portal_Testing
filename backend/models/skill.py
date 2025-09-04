@@ -48,6 +48,7 @@ class EmployeeSkill(Base):
     subskill_id = Column(Integer, ForeignKey("sub_skills.subskill_id", ondelete="CASCADE"), nullable=False)
     experience = Column(Integer)
     proficiency = Column(Integer)
+    resume_url = Column(Text) 
     certification = Column(String(200))
     certification_creation_date = Column(Date, nullable=True)
     certification_expiration_date = Column(Date, nullable=True)
@@ -76,9 +77,11 @@ class EmployeeSkillHistory(Base):
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     subskill_id = Column(Integer, ForeignKey("sub_skills.subskill_id", ondelete="CASCADE"), nullable=False)
 
-    experience = Column(Integer)
+    experience = Column(Integer) 
     proficiency = Column(Integer)
     certification = Column(String(200))
+    certification_creation_date = Column(Date, nullable=True)
+    certification_expiration_date = Column(Date, nullable=True)
     manager_proficiency = Column(Integer)
     manager_comments = Column(Text)
     approval_status = Column(
